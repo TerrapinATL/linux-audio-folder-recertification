@@ -4,29 +4,85 @@
 
 01. Introduction
 
-Use these commands after making changes such as:
+These procedures are based on a FOLDER LEVEL approach. Each bash script is designed to be executed manually from the appropriate target folder and is not intended to operate recursively.
+
+Use these commands after making intentional library changes such as:
 
 - Replacing a bad track
 - Updating album artwork
 - Correcting tags
 - Adding or removing tracks
 
+   -----------------------------------------------------------------
+
+-- Anticipated folder structure for this process:
+`
+Artist/
+└── Album/
+    ├── Track 01.flac
+    ├── Track 02.flac
+`
+
+   -----------------------------------------------------------------
+
+-- Supported Audio Formats
+
+- flac
+- mp3
+- m4a
+- ogg
+- opus
+- wav
+- aiff
+
+   -----------------------------------------------------------------
+
 ---
 
 02. Album Folder
 
 ---
+Run these commands from the album folder containing supported audio files.
 
-Run these commands from the album directory.
+   -----------------------------------------------------------------
 
-03. Step 1: Verify FLAC Files
+03. Step 1: Verify Audio Files
 
 ```bash
 
-flac -t *.flac
+find . -maxdepth 1 -type f \
+    \( \
+        -iname "*.flac" -o \
+        -iname "*.mp3"  -o \
+        -iname "*.m4a"  -o \
+        -iname "*.ogg"  -o \
+        -iname "*.opus" -o \
+        -iname "*.wav"  -o \
+        -iname "*.aiff" \
+    \) \
+    -print0 |
+while IFS= read -r -d '' file; do
 
+    case "${file,,}" in
+
+        *.flac)
+            flac -t "$file"
+            ;;
+
+        *)
+            ffmpeg \
+                -v error \
+                -i "$file" \
+                -f null -
+            ;;
+
+    esac
+
+done
 ```
 
+   -----------------------------------------------------------------
+   
 04. Step 2: Apply ReplayGain
 
 ```bash
@@ -34,44 +90,62 @@ flac -t *.flac
 shopt -s nullglob nocaseglob
 
 loudgain -a -k -s e \
-    *.flac \
-    *.mp3 \
-    *.ogg \
-    *.opus \
-    *.m4a \
-    *.mp4 \
-    *.aac \
-    *.ape \
-    *.wv \
-    *.mpc \
-    *.spx
+       *.flac \
+       *.mp3 \
+       *.ogg \
+       *.opus \
+       *.m4a
 
 ```
+Note: Wav & Aiff are not supported by Loudgain. 
+
+   -----------------------------------------------------------------
 
 05. Step 3: Create and Verify Album Checksum
 
+* Run from the album folder.
+* Create a checksum file for the current folder.
+* Verify that the generated hashes match immediately.
+* Non-recursive: operates only on the current album folder.
+
 ```bash
 
-find . -type f \
+#!/usr/bin/env bash
+# Step 3 – Create and Verify Album Checksum
+
+CHECKSUM="ALBUM.sha512sums.txt"
+
+find . -maxdepth 1 -type f \
+    ! -name "$CHECKSUM" \
     \( \
         -iname "*.flac" -o \
         -iname "*.mp3"  -o \
         -iname "*.m4a"  -o \
-        -iname "*.wav"  -o \
         -iname "*.ogg"  -o \
         -iname "*.opus" -o \
-        -iname "*.aac"  -o \
-        -iname "*.alac" -o \
+        -iname "*.wav"  -o \
         -iname "*.aiff" \
     \) \
     -print0 |
 LC_ALL=C sort -z |
-xargs -0 -r sha512sum > ALBUM.sha512sums.txt &&
-[ -s ALBUM.sha512sums.txt ] &&
-echo "CREATED: ALBUM.sha512sums.txt ($(wc -l < ALBUM.sha512sums.txt) files)" &&
-sha512sum -c ALBUM.sha512sums.txt &&
-echo "VERIFIED: ALBUM CHECKSUM OK" ||
-echo "FAILED: ALBUM CHECKSUM ERROR"
+xargs -0 -r sha512sum > "$CHECKSUM"
+
+if [ -s "$CHECKSUM" ]; then
+
+    echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") files)"
+    echo "VERIFYING: $CHECKSUM"
+
+    if sha512sum -c "$CHECKSUM"; then
+        echo "VERIFIED: ALBUM CHECKSUM OK"
+    else
+        echo "FAILED: ALBUM CHECKSUM ERROR"
+    fi
+
+else
+
+    echo "FAILED: NO SUPPORTED AUDIO FILES FOUND"
+
+fi
 
 ```
 
@@ -81,116 +155,240 @@ echo "FAILED: ALBUM CHECKSUM ERROR"
 
 ---
 
-Run this command from the artist directory.
+Run these commands from the Artist directory.
 
-07. Step 4: Create and Verify Artist Checksum
+   -----------------------------------------------------------------
+
+07. Step 5: Recursive Artist Audio Validation
+
+* Recursively inspect only supported audio files beneath that folder.
+* Verify audio integrity before any Artist-level checksum is created.
+* Does not modify files.
+* Produces a clear pass/fail report.
+
+   -----------------------------------------------------------------
+
+Step 5A: Recursive Artist Audio Validation Process
 
 ```bash
 
-if [ -z "$(find . -mindepth 2 -maxdepth 2 -type d)" ]; then
+#!/usr/bin/env bash
+# Step 5A – Recursive Artist Audio Validation
 
-    > ARTIST.sha512sums.txt
+LOG="artist_audio_validation.log"
+PASSED="artist_audio_passed.log"
+FAILED="artist_audio_failed.log"
+ERRORS="artist_audio_errors.log"
 
-    find . -mindepth 1 -maxdepth 1 -type d -print0 |
-    LC_ALL=C sort -z |
-    while IFS= read -r -d '' album; do
-        name=$(basename "$album")
+: > "$LOG"
+: > "$PASSED"
+: > "$FAILED"
+: > "$ERRORS"
 
-        hash=$(
-            cd "$album" &&
-            find . -type f ! -name ALBUM.sha512sums.txt -print0 |
-            LC_ALL=C sort -z |
-            xargs -0 sha512sum |
-            sha512sum |
-            cut -d' ' -f1
-        )
+total=0
+passed=0
+failed=0
 
-        printf "%s  %s\n" "$hash" "$name" >> ARTIST.sha512sums.txt
-    done
+while IFS= read -r -d '' file; do
 
-    echo "CREATED: $(basename "$PWD") ARTIST.sha512sums.txt"
+    total=$((total + 1))
 
-    while IFS=" " read -r stored_hash album; do
-        actual_hash=$(
-            cd "$album" 2>/dev/null &&
-            find . -type f ! -name ALBUM.sha512sums.txt -print0 |
-            LC_ALL=C sort -z |
-            xargs -0 -r sha512sum |
-            sha512sum |
-            cut -d' ' -f1
-        )
+    case "${file,,}" in
 
-        if [ "$stored_hash" = "$actual_hash" ]; then
-            echo "VERIFIED: $album"
-        else
-            echo "FAILED: $album"
-        fi
-    done < ARTIST.sha512sums.txt
+        *.flac)
+
+            if flac -t "$file" >/dev/null 2>>"$ERRORS"; then
+
+                echo "OK: $file" | tee -a "$LOG"
+                passed=$((passed + 1))
+
+            else
+
+                echo "FAILED: $file" | tee -a "$LOG"
+                failed=$((failed + 1))
+
+            fi
+            ;;
+
+        *.mp3|*.m4a|*.ogg|*.opus|*.wav|*.aiff)
+
+            if ffmpeg \
+                -v error \
+                -i "$file" \
+                -f null - \
+                >/dev/null \
+                2>>"$ERRORS"; then
+
+                echo "OK: $file" | tee -a "$LOG"
+                passed=$((passed + 1))
+
+            else
+
+                echo "FAILED: $file" | tee -a "$LOG"
+                failed=$((failed + 1))
+
+            fi
+            ;;
+
+    esac
+
+done < <(
+    find . -type f \
+    \( \
+        -iname "*.flac" -o \
+        -iname "*.mp3"  -o \
+        -iname "*.m4a"  -o \
+        -iname "*.ogg"  -o \
+        -iname "*.opus" -o \
+        -iname "*.wav"  -o \
+        -iname "*.aiff" \
+    \) \
+    -print0 |
+    LC_ALL=C sort -z
+)
+
+grep '^OK' "$LOG" > "$PASSED" || true
+grep '^FAILED' "$LOG" > "$FAILED" || true
+
+echo
+echo "RESULTS"
+echo "-------"
+echo "Files Tested: $total"
+echo "Passed:       $passed"
+echo "Failed:       $failed"
+
+if [ "$failed" -eq 0 ]; then
+
+    echo "VALIDATION PASSED"
 
 else
 
-    total=$(find . -mindepth 1 -maxdepth 1 -type d | wc -l)
-    i=0
-
-    find . -mindepth 1 -maxdepth 1 -type d -print0 |
-    LC_ALL=C sort -z |
-    while IFS= read -r -d '' artist; do
-
-        i=$((i + 1))
-
-        (
-            cd "$artist"
-
-            > ARTIST.sha512sums.txt
-
-            find . -mindepth 1 -maxdepth 1 -type d -print0 |
-            LC_ALL=C sort -z |
-            while IFS= read -r -d '' album; do
-
-                name=$(basename "$album")
-
-                hash=$(
-                    cd "$album" &&
-                    find . -type f ! -name ALBUM.sha512sums.txt -print0 |
-                    LC_ALL=C sort -z |
-                    xargs -0 sha512sum |
-                    sha512sum |
-                    cut -d' ' -f1
-                )
-
-                printf "%s  %s\n" "$hash" "$name" >> ARTIST.sha512sums.txt
-
-            done
-        )
-
-        echo "[$i/$total] CREATED: $(basename "$artist")"
-
-        (
-            cd "$artist"
-
-            while IFS=" " read -r stored_hash album; do
-
-                actual_hash=$(
-                    cd "$album" 2>/dev/null &&
-                    find . -type f ! -name ALBUM.sha512sums.txt -print0 |
-                    LC_ALL=C sort -z |
-                    xargs -0 sha512sum |
-                    sha512sum |
-                    cut -d' ' -f1
-                )
-
-                if [ "$stored_hash" = "$actual_hash" ]; then
-                    echo "VERIFIED: $album"
-                else
-                    echo "FAILED: $album"
-                fi
-
-            done < ARTIST.sha512sums.txt
-        )
-
-    done
+    echo "VALIDATION FAILED"
+    echo "Review: $FAILED"
 
 fi
+
+
+```
+
+   -----------------------------------------------------------------
+
+Step 5B: Separate Results
+
+The following files are created by Step 5A:
+
+   1. artist_audio_validation.log
+      * Complete validation report.
+   2. artist_audio_passed.log
+      * Files that passed integrity testing.
+   3. artist_audio_failed.log
+      * Files that failed integrity testing.
+   4. artist_audio_errors.log
+      * Tool output generated during validation.
+
+   -----------------------------------------------------------------
+
+Step 5C: Review Results
+```bash
+
+cat artist_audio_errors.log
+
+cat artist_audio_validation.log
+
+cat artist_audio_passed.log
+
+cat artist_audio_failed.log
+
+```
+
+   -----------------------------------------------------------------
+
+08. Step 6: Create and Verify Artist Checksum
+
+Must be run from Artist folder only.
+
+```bash
+
+#!/usr/bin/env bash
+# Step 6 – Create and Verify Artist Checksum
+#
+# Run from the artist folder only.
+# Each immediate child folder is treated as an album folder.
+# Requires completed ALBUM.sha512sums.txt files.
+# Does not recursively inspect audio files.
+
+CHECKSUM="ARTIST.sha512sums.txt"
+TEMP_CHECKSUM="${CHECKSUM}.tmp"
+FAILED=0
+
+: > "$TEMP_CHECKSUM"
+
+while IFS= read -r -d '' album; do
+
+    name=$(basename "$album")
+
+    if [ ! -f "$album/ALBUM.sha512sums.txt" ]; then
+
+        echo "FAILED: MISSING ALBUM CHECKSUM: $name"
+        FAILED=1
+        continue
+
+    fi
+
+    hash=$(
+        cd "$album" &&
+        sha512sum ALBUM.sha512sums.txt |
+        cut -d' ' -f1
+    )
+
+    printf "%s  %s\n" "$hash" "$name" >> "$TEMP_CHECKSUM"
+
+done < <(
+    find . -mindepth 1 -maxdepth 1 -type d -print0 |
+    LC_ALL=C sort -z
+)
+
+if [ "$FAILED" -ne 0 ]; then
+
+    rm -f "$TEMP_CHECKSUM"
+    echo "FAILED: ARTIST CHECKSUM NOT CREATED"
+    exit 1
+
+fi
+
+if [ -s "$TEMP_CHECKSUM" ]; then
+
+    mv "$TEMP_CHECKSUM" "$CHECKSUM"
+    echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") albums)"
+
+else
+
+    rm -f "$TEMP_CHECKSUM"
+    echo "FAILED: NO ALBUM CHECKSUMS FOUND"
+    exit 1
+
+fi
+
+
+while read -r stored_hash album; do
+
+    actual_hash=$(
+        cd "$album" 2>/dev/null &&
+        sha512sum ALBUM.sha512sums.txt |
+        cut -d' ' -f1
+    )
+
+    if [ "$stored_hash" = "$actual_hash" ]; then
+
+        echo "VERIFIED: $album"
+
+    else
+
+        echo "FAILED: $album"
+
+    fi
+
+done < "$CHECKSUM"
 
 ```
 
