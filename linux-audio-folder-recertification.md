@@ -22,7 +22,8 @@ Use these commands after making intentional library changes such as:
 Artist/
 └── Album/
     ├── Track 01.flac
-    ├── Track 02.flac
+    ├── Track 02.mp3
+    ├── Track 03.m4a    
 ```
 
       -----------------------------------------------------------------
