@@ -50,23 +50,13 @@ Run these commands from the album folder containing supported audio files.
 03. Step 1: Verify Audio Files
 
 ```bash
+# Step 1: Verify Audio Files
 
 #!/usr/bin/env bash
 
 passed=0
 failed=0
 
-find . -maxdepth 1 -type f \
-    \( \
-        -iname "*.flac" -o \
-        -iname "*.mp3"  -o \
-        -iname "*.m4a"  -o \
-        -iname "*.ogg"  -o \
-        -iname "*.opus" -o \
-        -iname "*.wav"  -o \
-        -iname "*.aiff" \
-    \) \
-    -print0 |
 while IFS= read -r -d '' file; do
 
     case "${file,,}" in
@@ -93,7 +83,19 @@ while IFS= read -r -d '' file; do
 
     esac
 
-done
+done < <(
+    find . -maxdepth 1 -type f \
+        \( \
+            -iname "*.flac" -o \
+            -iname "*.mp3"  -o \
+            -iname "*.m4a"  -o \
+            -iname "*.ogg"  -o \
+            -iname "*.opus" -o \
+            -iname "*.wav"  -o \
+            -iname "*.aiff" \
+        \) \
+        -print0 | sort -z -V
+)
 
 echo "----------------------------------------"
 echo "Scan complete. Passed: $passed | Failed: $failed"
