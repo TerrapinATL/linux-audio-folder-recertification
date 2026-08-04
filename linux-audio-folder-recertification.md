@@ -108,14 +108,42 @@ echo "Scan complete. Passed: $passed | Failed: $failed"
 
 ```bash
 
+#!/usr/bin/env bash
+
+LOG_FILE="loudgain_error.log"
+
 shopt -s nullglob nocaseglob
 
-loudgain -a -k -s e \
-       *.flac \
-       *.mp3 \
-       *.ogg \
-       *.opus \
-       *.m4a
+files=(
+    *.flac
+    *.mp3
+    *.ogg
+    *.opus
+    *.m4a
+)
+
+if [ ${#files[@]} -eq 0 ]; then
+    echo "No matching audio files found."
+    exit 0
+fi
+
+# Run loudgain and capture output while streaming it live to stdout
+if ! loudgain -a -k -s e "${files[@]}"; then
+    status=$?
+    {
+        echo "----------------------------------------"
+        echo "Timestamp : $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "Directory : $(pwd)"
+        echo "Exit Code : $status"
+        echo "Files Targeted (${#files[@]}):"
+        printf '  - %s\n' "${files[@]}"
+        echo "----------------------------------------"
+        echo ""
+    } >> "$LOG_FILE"
+
+    echo "Error encountered! Details appended to $LOG_FILE" >&2
+    exit "$status"
+fi
 
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
