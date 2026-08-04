@@ -51,6 +51,11 @@ Run these commands from the album folder containing supported audio files.
 
 ```bash
 
+#!/usr/bin/env bash
+
+passed=0
+failed=0
+
 find . -maxdepth 1 -type f \
     \( \
         -iname "*.flac" -o \
@@ -67,20 +72,31 @@ while IFS= read -r -d '' file; do
     case "${file,,}" in
 
         *.flac)
-            # -s/--silent suppresses the copyright header and progress output
-            flac -s -t "$file" || echo "Corrupt file: $file"
+            if flac -s -t "$file" 2>/dev/null; then
+                echo "[OK]     $file"
+                ((passed++))
+            else
+                echo "[FAILED] $file"
+                ((failed++))
+            fi
             ;;
 
         *)
-            ffmpeg \
-                -v error \
-                -i "$file" \
-                -f null -
+            if ffmpeg -v error -i "$file" -f null - 2>&1 | grep -q .; then
+                echo "[FAILED] $file"
+                ((failed++))
+            else
+                echo "[OK]     $file"
+                ((passed++))
+            fi
             ;;
 
     esac
 
 done
+
+echo "----------------------------------------"
+echo "Scan complete. Passed: $passed | Failed: $failed"
 
 ```
 
