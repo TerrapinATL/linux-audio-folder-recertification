@@ -2,6 +2,8 @@
 
 ---
 
+01. Introduction
+
 Use these commands after making changes such as:
 
 - Replacing a bad track
@@ -11,21 +13,24 @@ Use these commands after making changes such as:
 
 ---
 
-### Album Folder
+02. Album Folder
 
 ---
 
 Run these commands from the album directory.
 
-### Step 1: Verify FLAC Files
+03. Step 1: Verify FLAC Files
 
 ```bash
+
 flac -t *.flac
+
 ```
 
-### Step 2: Apply ReplayGain
+04. Step 2: Apply ReplayGain
 
 ```bash
+
 shopt -s nullglob nocaseglob
 
 loudgain -a -k -s e \
@@ -40,11 +45,13 @@ loudgain -a -k -s e \
     *.wv \
     *.mpc \
     *.spx
+
 ```
 
-### Step 3: Create and Verify Album Checksum
+05. Step 3: Create and Verify Album Checksum
 
 ```bash
+
 find . -type f \
     \( \
         -iname "*.flac" -o \
@@ -65,19 +72,21 @@ echo "CREATED: ALBUM.sha512sums.txt ($(wc -l < ALBUM.sha512sums.txt) files)" &&
 sha512sum -c ALBUM.sha512sums.txt &&
 echo "VERIFIED: ALBUM CHECKSUM OK" ||
 echo "FAILED: ALBUM CHECKSUM ERROR"
+
 ```
 
 ---
 
-### Artist Folder
+06. Artist Folder
 
 ---
 
 Run this command from the artist directory.
 
-### Step 4: Create and Verify Artist Checksum
+07. Step 4: Create and Verify Artist Checksum
 
 ```bash
+
 if [ -z "$(find . -mindepth 2 -maxdepth 2 -type d)" ]; then
 
     > ARTIST.sha512sums.txt
@@ -106,7 +115,7 @@ if [ -z "$(find . -mindepth 2 -maxdepth 2 -type d)" ]; then
             cd "$album" 2>/dev/null &&
             find . -type f ! -name ALBUM.sha512sums.txt -print0 |
             LC_ALL=C sort -z |
-            xargs -0 sha512sum |
+            xargs -0 -r sha512sum |
             sha512sum |
             cut -d' ' -f1
         )
@@ -182,6 +191,7 @@ else
     done
 
 fi
+
 ```
 
 ---
