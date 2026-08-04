@@ -18,12 +18,12 @@ Use these commands after making intentional library changes such as:
 
 -- Anticipated folder structure for this process:
 
-`
+```
 Artist/
 └── Album/
     ├── Track 01.flac
     ├── Track 02.flac
-`
+```
 
       -----------------------------------------------------------------
 
