@@ -13,9 +13,10 @@ Use these commands after making intentional library changes such as:
 - Correcting tags
 - Adding or removing tracks
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 -- Anticipated folder structure for this process:
+
 `
 Artist/
 └── Album/
@@ -23,7 +24,7 @@ Artist/
     ├── Track 02.flac
 `
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 -- Supported Audio Formats
 
@@ -42,7 +43,7 @@ Artist/
 ---
 Run these commands from the album folder containing supported audio files.
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 03. Step 1: Verify Audio Files
 
@@ -79,7 +80,7 @@ while IFS= read -r -d '' file; do
 done
 ```
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
    
 04. Step 2: Apply ReplayGain
 
@@ -97,7 +98,7 @@ loudgain -a -k -s e \
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 05. Step 3: Create and Verify Album Checksum
 
@@ -155,7 +156,7 @@ fi
 
 Run these commands from the Artist directory.
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 07. Step 5: Recursive Artist Audio Validation
 
@@ -164,7 +165,7 @@ Run these commands from the Artist directory.
 * Does not modify files.
 * Produces a clear pass/fail report.
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 Step 5A: Recursive Artist Audio Validation Process
 
@@ -269,7 +270,7 @@ fi
 
 ```
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 Step 5B: Separate Results
 
@@ -284,7 +285,7 @@ The following files are created by Step 5A:
    4. artist_audio_errors.log
       * Tool output generated during validation.
 
-   -----------------------------------------------------------------
+     -----------------------------------------------------------------
 
 Step 5C: Review Results
 ```bash
@@ -299,7 +300,7 @@ cat artist_audio_failed.log
 
 ```
 
-   -----------------------------------------------------------------
+      -----------------------------------------------------------------
 
 08. Step 6: Create and Verify Artist Checksum
 
