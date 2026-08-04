@@ -13,6 +13,8 @@ Use these commands after making changes such as:
 
 ## Album Folder
 
+---
+
 Run these commands from the album directory.
 
 ### Step 1: Verify FLAC Files
@@ -68,6 +70,8 @@ echo "FAILED: ALBUM CHECKSUM ERROR"
 ---
 
 ## Artist Folder
+
+---
 
 Run this command from the artist directory.
 
