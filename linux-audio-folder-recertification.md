@@ -325,17 +325,18 @@ cat artist_audio_failed.log
 
 08. Step 6: Create and Verify Artist Checksum
 
-Must be run from Artist folder only.
+* Run from the artist folder only.
+* Each immediate child folder is treated as an album folder.
+* Requires completed ALBUM.sha512sums.txt files.
+* Does not recursively inspect audio files.
 
 ```bash
 
 #!/usr/bin/env bash
 # Step 6 – Create and Verify Artist Checksum
-#
-# Run from the artist folder only.
-# Each immediate child folder is treated as an album folder.
-# Requires completed ALBUM.sha512sums.txt files.
-# Does not recursively inspect audio files.
+
+# Clean up any existing .log files in the current directory
+rm -f ./*.log
 
 CHECKSUM="ARTIST.sha512sums.txt"
 TEMP_CHECKSUM="${CHECKSUM}.tmp"
