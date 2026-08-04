@@ -11,7 +11,7 @@ Use these commands after making changes such as:
 
 ---
 
-## Album Folder
+### Album Folder
 
 ---
 
@@ -69,7 +69,7 @@ echo "FAILED: ALBUM CHECKSUM ERROR"
 
 ---
 
-## Artist Folder
+### Artist Folder
 
 ---
 
