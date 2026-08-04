@@ -67,7 +67,8 @@ while IFS= read -r -d '' file; do
     case "${file,,}" in
 
         *.flac)
-            flac -t "$file"
+            # -s/--silent suppresses the copyright header and progress output
+            flac -s -t "$file" || echo "Corrupt file: $file"
             ;;
 
         *)
@@ -80,6 +81,7 @@ while IFS= read -r -d '' file; do
     esac
 
 done
+
 ```
 
       -----------------------------------------------------------------
