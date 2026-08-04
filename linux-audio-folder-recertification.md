@@ -154,7 +154,8 @@ if [ -s "$CHECKSUM" ]; then
     echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") files)"
     echo "VERIFYING: $CHECKSUM"
 
-    if sha512sum -c "$CHECKSUM"; then
+    # Swap output from "filename: OK" to "OK: filename"
+    if sha512sum -c "$CHECKSUM" | awk -F': ' '{printf "%-6s %s\n", $2, $1}'; then
         echo "VERIFIED: ALBUM CHECKSUM OK"
     else
         echo "FAILED: ALBUM CHECKSUM ERROR"
