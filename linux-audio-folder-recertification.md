@@ -50,9 +50,9 @@ Run these commands from the album folder containing supported audio files.
 03. Step 1: Verify Audio Files
 
 ```bash
-# Step 1: Verify Audio Files
 
 #!/usr/bin/env bash
+# Step 1: Verify Audio Files
 
 passed=0
 failed=0
