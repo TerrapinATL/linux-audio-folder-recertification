@@ -334,8 +334,11 @@ cat artist_audio_failed.log
 
 #!/usr/bin/env bash
 # Step 6 – Create and Verify Artist Checksum
+#
+# Run from the artist folder only.
+# Each immediate child folder is treated as an album folder.
+# Requires completed ALBUM.sha512sums.txt files.
 
-# Clean up any existing .log files in the current directory
 rm -f ./*.log
 
 CHECKSUM="ARTIST.sha512sums.txt"
@@ -356,9 +359,13 @@ while IFS= read -r -d '' album; do
 
     fi
 
+    # Calculates composite hash of all non-checksum files in the album directory
     hash=$(
         cd "$album" &&
-        sha512sum ALBUM.sha512sums.txt |
+        find . -type f ! -name "ALBUM.sha512sums.txt" -print0 |
+        LC_ALL=C sort -z |
+        xargs -0 sha512sum |
+        sha512sum |
         cut -d' ' -f1
     )
 
@@ -395,17 +402,20 @@ while read -r stored_hash album; do
 
     actual_hash=$(
         cd "$album" 2>/dev/null &&
-        sha512sum ALBUM.sha512sums.txt |
+        find . -type f ! -name "ALBUM.sha512sums.txt" -print0 |
+        LC_ALL=C sort -z |
+        xargs -0 sha512sum |
+        sha512sum |
         cut -d' ' -f1
     )
 
     if [ "$stored_hash" = "$actual_hash" ]; then
 
-        echo "VERIFIED: $album"
+        printf "%-10s %s\n" "OK" "$album"
 
     else
 
-        echo "FAILED: $album"
+        printf "%-10s %s\n" "MISMATCH" "$album"
 
     fi
 
