@@ -68,10 +68,10 @@ while IFS= read -r -d '' file; do
 
         *.flac)
             if flac -s -t -- "$file" >/dev/null 2>&1; then
-                echo "[OK]     $file"
+                echo "[OK]     $(basename "$file")"
                 ((passed++))
             else
-                echo "[FAILED] $file"
+                echo "[FAILED] $(basename "$file")"
                 ((failed++))
             fi
             ;;
@@ -79,16 +79,12 @@ while IFS= read -r -d '' file; do
         *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus)
             if ffmpeg -nostdin -v error -hide_banner -nostats \
                 -i "$file" -f null - >/dev/null 2>&1; then
-                echo "[OK]     $file"
+                echo "[OK]     $(basename "$file")"
                 ((passed++))
             else
-                echo "[FAILED] $file"
+                echo "[FAILED] $(basename "$file")"
                 ((failed++))
             fi
-            ;;
-
-        *)
-            # Ignore unsupported files
             ;;
 
     esac
@@ -102,7 +98,7 @@ done < <(
         -iname "*.ogg"  -o \
         -iname "*.aac"  -o \
         -iname "*.opus" \
-    \) -print0
+    \) -print0 | sort -z -V
 )
 
 echo
@@ -111,7 +107,6 @@ echo "Scan complete"
 echo "Files checked: $total"
 echo "Passed:        $passed"
 echo "Failed:        $failed"
-echo "----------------------------------------"
 
 if (( failed > 0 )); then
     exit 1
