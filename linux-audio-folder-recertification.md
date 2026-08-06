@@ -54,11 +54,15 @@ Run these commands from the album folder containing supported audio files.
 #!/usr/bin/env bash
 # Step 1: Verify Audio Files (Run from Album folder)
 
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/STEP_1_verify_audio.log"
+: > "$LOG_FILE"
+
 verify_audio() {
     local passed=0 failed=0 total=0
 
-    echo "Scanning audio files..."
-    echo
+    echo "Scanning audio files in $(pwd)..." | tee -a "$LOG_FILE"
 
     while IFS= read -r -d '' file; do
         ((total++))
@@ -66,10 +70,10 @@ verify_audio() {
         case "${file,,}" in
             *.flac)
                 if flac -s -t -- "$file" >/dev/null 2>&1; then
-                    echo "[OK]     $(basename "$file")"
+                    echo "[OK]     $(basename "$file")" | tee -a "$LOG_FILE"
                     ((passed++))
                 else
-                    echo "[FAILED] $(basename "$file")"
+                    echo "[FAILED] $(basename "$file")" | tee -a "$LOG_FILE"
                     ((failed++))
                 fi
                 ;;
@@ -77,10 +81,10 @@ verify_audio() {
             *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus|*.aiff|*.aif)
                 if ffmpeg -nostdin -v error -hide_banner -nostats \
                     -i "$file" -f null - >/dev/null 2>&1; then
-                    echo "[OK]     $(basename "$file")"
+                    echo "[OK]     $(basename "$file")" | tee -a "$LOG_FILE"
                     ((passed++))
                 else
-                    echo "[FAILED] $(basename "$file")"
+                    echo "[FAILED] $(basename "$file")" | tee -a "$LOG_FILE"
                     ((failed++))
                 fi
                 ;;
@@ -88,24 +92,16 @@ verify_audio() {
 
     done < <(
         find . -maxdepth 1 -type f \( \
-            -iname "*.flac" -o \
-            -iname "*.mp3"  -o \
-            -iname "*.m4a"  -o \
-            -iname "*.wav"  -o \
-            -iname "*.ogg"  -o \
-            -iname "*.aac"  -o \
-            -iname "*.opus" -o \
-            -iname "*.aiff" -o \
-            -iname "*.aif"  \
+            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
+            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
+            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
         \) -print0 | LC_ALL=C sort -z -V
     )
 
-    echo
-    echo "----------------------------------------"
-    echo "Scan complete"
-    echo "Files checked: $total"
-    echo "Passed:        $passed"
-    echo "Failed:        $failed"
+    {
+        echo "----------------------------------------"
+        echo "Scan complete | Total: $total | Passed: $passed | Failed: $failed"
+    } | tee -a "$LOG_FILE"
 
     (( failed == 0 ))
 }
@@ -123,38 +119,19 @@ verify_audio
 #!/usr/bin/env bash
 # Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
 
-LOG_FILE="loudgain_error.log"
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/STEP_2A_album_gain.log"
+
 shopt -s nullglob nocaseglob
+files=( *.flac *.mp3 *.ogg *.opus *.aac *.ape *.wv *.mpc *.spx )
 
-files=(
-    *.flac *.mp3 *.ogg *.opus
-    *.aac *.ape *.wv *.mpc *.spx
-)
+[ ${#files[@]} -eq 0 ] && exit 0
 
-if [ ${#files[@]} -eq 0 ]; then
-    echo "No matching standard audio files found in $(pwd)"
-    exit 0
+if ! loudgain -a -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
+    exit 1
 fi
-
-if ! loudgain -a -k -s e -L -- "${files[@]}"; then
-    status=$?
-    {
-        echo "----------------------------------------"
-        echo "Timestamp : $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "Directory : $(pwd)"
-        echo "Exit Code : $status"
-        echo "Files Targeted (${#files[@]}):"
-        printf '  - %s\n' "${files[@]}"
-        echo "----------------------------------------"
-        echo ""
-    } >> "$LOG_FILE"
-
-    echo "Error encountered! Details appended to $LOG_FILE" >&2
-    exit "$status"
-fi
-
-echo ""
-echo "Album ReplayGain processing completed successfully."
 
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
@@ -176,52 +153,33 @@ To guarantee stability:
 #!/usr/bin/env bash
 # Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
 
-LOG_FILE="loudgain_error.log"
-shopt -s nullglob nocaseglob
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/STEP_2B_track_gain_m4a.log"
 
+shopt -s nullglob nocaseglob
 files=( *.m4a *.mp4 )
 
-if [ ${#files[@]} -eq 0 ]; then
-    echo "No M4A/MP4 audio files found in $(pwd)"
-    exit 0
-fi
+[ ${#files[@]} -eq 0 ] && exit 0
 
-echo "Sanitizing MP4 container metadata across ${#files[@]} file(s)..."
+echo "Sanitizing MP4 containers..." | tee -a "$LOG_FILE"
 for f in "${files[@]}"; do
-    tmp_file="._fixed_${f}"
-    if ffmpeg -v error -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp_file"; then
-        mv "$tmp_file" "$f"
+    tmp="._fixed_${f}"
+    if ffmpeg -v error -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp" 2>>"$LOG_FILE"; then
+        mv "$tmp" "$f"
     else
-        echo "Warning: FFmpeg failed to process $f. Retaining original." >&2
-        rm -f "$tmp_file"
+        echo "Warning: FFmpeg container fix failed for $f" | tee -a "$LOG_FILE"
+        rm -f "$tmp"
     fi
 done
 
-echo ""
-echo "Applying Track Gain to M4A/MP4 files..."
-
-if ! loudgain -k -s e -L -- "${files[@]}"; then
-    status=$?
-    {
-        echo "----------------------------------------"
-        echo "Timestamp : $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "Directory : $(pwd)"
-        echo "Exit Code : $status"
-        echo "Files Targeted (${#files[@]}):"
-        printf '  - %s\n' "${files[@]}"
-        echo "----------------------------------------"
-        echo ""
-    } >> "$LOG_FILE"
-
-    echo "Error encountered during tagging! Details appended to $LOG_FILE" >&2
-    exit "$status"
+if ! loudgain -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
+    exit 1
 fi
 
-echo ""
-echo "M4A Track ReplayGain processing completed successfully."
 
 ```
-Note: Wav & Aiff are not supported by Loudgain. 
 
       -----------------------------------------------------------------
 
@@ -235,9 +193,13 @@ Note: Wav & Aiff are not supported by Loudgain.
 ```bash
 
 #!/usr/bin/env bash
-# Step 3 – Create and Verify Album Checksum
+# Step 3: Create and Verify Album Checksum
 
 set -o pipefail
+
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/STEP_3_album_checksum.log"
 
 CHECKSUM="ALBUM.sha512sums.txt"
 
@@ -250,22 +212,17 @@ LC_ALL=C sort -z |
 xargs -0 -r sha512sum > "$CHECKSUM"
 
 if [ -s "$CHECKSUM" ]; then
-
-    echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") files)"
-    echo "VERIFYING: $CHECKSUM"
-
-    if sha512sum -c "$CHECKSUM" | awk -F': ' '{printf "%-6s %s\n", $2, $1}'; then
-        echo "VERIFIED: ALBUM CHECKSUM OK"
+    echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") files)" | tee -a "$LOG_FILE"
+    
+    if sha512sum -c "$CHECKSUM" 2>&1 | tee -a "$LOG_FILE" | awk -F': ' '{printf "%-6s %s\n", $2, $1}'; then
+        echo "VERIFIED: ALBUM CHECKSUM OK" | tee -a "$LOG_FILE"
     else
-        echo "FAILED: ALBUM CHECKSUM ERROR"
+        echo "FAILED: ALBUM CHECKSUM ERROR" | tee -a "$LOG_FILE"
         exit 1
     fi
-
 else
-
-    echo "FAILED: NO SUPPORTED AUDIO FILES FOUND"
+    echo "FAILED: NO SUPPORTED AUDIO FILES FOUND" | tee -a "$LOG_FILE"
     exit 1
-
 fi
 
 ```
@@ -296,21 +253,22 @@ Step 4A: Recursive Artist Audio Validation Process
 #!/usr/bin/env bash
 # Step 4A – Recursive Artist Audio Validation (Run from Artist folder)
 
-LOG="artist_audio_validation.log"
-PASSED="artist_audio_passed.log"
-FAILED="artist_audio_failed.log"
-ERRORS="artist_audio_errors.log"
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+
+LOG="$LOG_DIR/STEP_4A_artist_audio_validation.log"
+PASSED="$LOG_DIR/STEP_4A_artist_audio_passed.log"
+FAILED="$LOG_DIR/STEP_4A_artist_audio_failed.log"
+ERRORS="$LOG_DIR/STEP_4A_artist_audio_errors.log"
 
 : > "$LOG"
 : > "$PASSED"
 : > "$FAILED"
 : > "$ERRORS"
 
-total=0
-passed=0
-failed=0
+total=0; passed=0; failed=0
 
-echo "Starting audio validation..." | tee -a "$LOG"
+echo "Starting recursive validation for: $(pwd)" | tee -a "$LOG"
 
 while IFS= read -r -d '' file; do
     total=$((total + 1))
@@ -318,29 +276,28 @@ while IFS= read -r -d '' file; do
 
     if ffmpeg -v error -i "$clean_file" -f null - 2>>"$ERRORS"; then
         passed=$((passed + 1))
-        echo "OK: $clean_file" | tee -a "$PASSED" "$LOG"
+        echo "OK: $clean_file" >> "$PASSED"
+        echo "OK: $clean_file" >> "$LOG"
     else
         failed=$((failed + 1))
-        echo "FAILED: $clean_file" | tee -a "$FAILED" "$LOG"
+        echo "FAILED: $clean_file" >> "$FAILED"
+        echo "FAILED: $clean_file" | tee -a "$LOG"
     fi
 done < <(
     find . -type f \( \
-        -iname "*.flac" -o \
-        -iname "*.mp3"  -o \
-        -iname "*.m4a"  -o \
-        -iname "*.wav"  -o \
-        -iname "*.ogg"  -o \
-        -iname "*.aac"  -o \
-        -iname "*.opus" -o \
-        -iname "*.aiff" -o \
-        -iname "*.aif"  \
+        -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
+        -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
+        -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
     \) -print0
 )
 
 echo "----------------------------------------" | tee -a "$LOG"
-echo "Validation Complete." | tee -a "$LOG"
 echo "Total Processed: $total | Passed: $passed | Failed: $failed" | tee -a "$LOG"
-echo "Review failed files in: $FAILED"
+
+if (( failed > 0 )); then
+    echo "Validation failed for $failed file(s). Review logs in: $LOG_DIR" >&2
+    exit 1
+fi
 
 ```
 
@@ -348,29 +305,42 @@ echo "Review failed files in: $FAILED"
 
 Step 4B: Separate Results
 
-The following files are created by Step 4A:
+Step 4A generates four distinct log files inside $HOME/.logs/Linux_Audio_Folder_Level/:
 
-   1. artist_audio_validation.log
-      * Complete validation report.
-   2. artist_audio_passed.log
-      * Files that passed integrity testing.
-   3. artist_audio_failed.log
-      * Files that failed integrity testing.
-   4. artist_audio_errors.log
-      * Tool output generated during validation.
+    STEP_4A_artist_audio_validation.log
+
+        Complete validation report summary.
+
+    STEP_4A_artist_audio_passed.log
+
+        List of all audio files that passed integrity checks.
+
+    STEP_4A_artist_audio_failed.log
+
+        List of audio files that failed integrity checks.
+
+    STEP_4A_artist_audio_errors.log
+
+        Raw ffmpeg decoder output recorded during failure inspection.
 
      -----------------------------------------------------------------
 
 Step 4C: Review Results
 ```bash
 
-cat artist_audio_errors.log
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 
-cat artist_audio_validation.log
+# View raw FFmpeg error output
+cat "$LOG_DIR/STEP_4A_artist_audio_errors.log"
 
-cat artist_audio_passed.log
+# View overall summary report
+cat "$LOG_DIR/STEP_4A_artist_audio_validation.log"
 
-cat artist_audio_failed.log
+# View list of passed files
+cat "$LOG_DIR/STEP_4A_artist_audio_passed.log"
+
+# View list of failed files
+cat "$LOG_DIR/STEP_4A_artist_audio_failed.log"
 
 ```
 
@@ -394,6 +364,10 @@ cat artist_audio_failed.log
 
 set -o pipefail
 
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/STEP_5_artist_checksum.log"
+
 CHECKSUM="ARTIST.sha512sums.txt"
 TEMP_CHECKSUM="${CHECKSUM}.tmp"
 FAILED=0
@@ -401,16 +375,14 @@ FAILED=0
 : > "$TEMP_CHECKSUM"
 
 while IFS= read -r -d '' album; do
-
     name=$(basename "$album")
 
     if [ ! -f "$album/ALBUM.sha512sums.txt" ]; then
-        echo "FAILED: MISSING ALBUM CHECKSUM: $name"
+        echo "FAILED: MISSING ALBUM CHECKSUM: $name" | tee -a "$LOG_FILE"
         FAILED=1
         continue
     fi
 
-    # Composite hash matching audio-file scope of Step 3
     hash=$(
         cd "$album" &&
         find . -maxdepth 1 -type f \( \
@@ -425,30 +397,23 @@ while IFS= read -r -d '' album; do
     )
 
     printf "%s  %s\n" "$hash" "$name" >> "$TEMP_CHECKSUM"
-
 done < <(
     find . -mindepth 1 -maxdepth 1 -type d -print0 |
     LC_ALL=C sort -z
 )
 
-if [ "$FAILED" -ne 0 ]; then
+if [ "$FAILED" -ne 0 ] || [ ! -s "$TEMP_CHECKSUM" ]; then
     rm -f "$TEMP_CHECKSUM"
-    echo "FAILED: ARTIST CHECKSUM NOT CREATED (Missing Album Checksums)"
+    echo "FAILED: ARTIST CHECKSUM CREATION ABORTED" | tee -a "$LOG_FILE"
     exit 1
 fi
 
-if [ -s "$TEMP_CHECKSUM" ]; then
-    mv "$TEMP_CHECKSUM" "$CHECKSUM"
-    echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") albums)"
-else
-    rm -f "$TEMP_CHECKSUM"
-    echo "FAILED: NO ALBUM CHECKSUMS FOUND"
-    exit 1
-fi
+mv "$TEMP_CHECKSUM" "$CHECKSUM"
+echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") albums)" | tee -a "$LOG_FILE"
 
-echo "VERIFYING ARTIST CHECKSUMS..."
+# Verification Phase
+MISMATCH_COUNT=0
 while read -r stored_hash album; do
-
     actual_hash=$(
         cd "$album" 2>/dev/null &&
         find . -maxdepth 1 -type f \( \
@@ -463,12 +428,23 @@ while read -r stored_hash album; do
     )
 
     if [ "$stored_hash" = "$actual_hash" ]; then
-        printf "%-10s %s\n" "OK" "$album"
+        printf "%-10s %s\n" "OK" "$album" | tee -a "$LOG_FILE"
     else
-        printf "%-10s %s\n" "MISMATCH" "$album"
+        printf "%-10s %s\n" "MISMATCH" "$album" | tee -a "$LOG_FILE"
+        ((MISMATCH_COUNT++))
     fi
-
 done < "$CHECKSUM"
+
+# Automatic log directory cleanup upon successful final pass
+if [ "$MISMATCH_COUNT" -eq 0 ]; then
+    echo "----------------------------------------"
+    echo "ALL PROCESSES PASSED. Purging log directory: $LOG_DIR"
+    rm -rf "$LOG_DIR"
+else
+    echo "----------------------------------------" >&2
+    echo "ARTIST CHECKSUM ERRORS DETECTED. Logs retained in $LOG_DIR" >&2
+    exit 1
+fi
 
 ```
 
