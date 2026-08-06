@@ -109,9 +109,9 @@ echo "Passed:        $passed"
 echo "Failed:        $failed"
 
 if (( failed > 0 )); then
-    exit 1
+    return 1 2>/dev/null || exit 1
 else
-    exit 0
+    return 0 2>/dev/null || exit 0
 fi
 
 ```
