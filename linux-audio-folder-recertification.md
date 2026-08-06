@@ -118,29 +118,33 @@ verify_audio
 
       -----------------------------------------------------------------
    
-04. Step 2: Apply ReplayGain
+04A. Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
 
 ```bash
 
 #!/usr/bin/env bash
 
-#Step 2: Apply ReplayGain
+# Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
+
+For standard audio formats, `loudgain -a` calculates both **Album Gain** and **Track Gain** simultaneously using EBU R128 standards (`-s e`), strips clipping (`-k`), and displays live progress (`-L`).
+
+```bash
+#!/usr/bin/env bash
 
 LOG_FILE="loudgain_error.log"
-
 shopt -s nullglob nocaseglob
 
 files=(
-    *.flac *.mp3 *.m4a *.ogg *.opus
-    *.mp4  *.aac *.ape *.wv  *.mpc *.spx
+    *.flac *.mp3 *.ogg *.opus
+    *.aac *.ape *.wv *.mpc *.spx
 )
 
 if [ ${#files[@]} -eq 0 ]; then
-    echo "No matching audio files found in $(pwd)"
+    echo "No matching standard audio files found in $(pwd)"
+    read -p "Press Enter to exit..."
     exit 0
 fi
 
-# Run loudgain with moOde standard flags (-s e -L) and stream live output
 if ! loudgain -a -k -s e -L -- "${files[@]}"; then
     status=$?
     {
@@ -155,11 +159,70 @@ if ! loudgain -a -k -s e -L -- "${files[@]}"; then
     } >> "$LOG_FILE"
 
     echo "Error encountered! Details appended to $LOG_FILE" >&2
+    read -p "Press Enter to exit..."
     exit "$status"
 fi
 
+echo ""
+echo "Album ReplayGain processing completed successfully."
+read -p "Press Enter to exit..."
+
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
+
+      -----------------------------------------------------------------
+   
+04B. Step 2B: Apply Track Gain Only (M4A / MP4 Workaround)
+
+Note: M4A/MP4 Files: Loudgain suffers from an upstream C-level memory corruption bug (segmentation fault) when writing album-wide metadata into MP4/M4A atom headers. To prevent crashes while keeping standard EBU R128 tags (-s e), M4A containers are intentionally processed using Track Gain only (by omitting the -a flag).
+
+```bash
+
+#!/usr/bin/env bash
+
+#Step 2B: Apply Track Gain Only (M4A / MP4 Workaround)
+
+#!/usr/bin/env bash
+
+LOG_FILE="loudgain_error.log"
+shopt -s nullglob nocaseglob
+
+files=(
+    *.m4a *.mp4
+)
+
+if [ ${#files[@]} -eq 0 ]; then
+    echo "No M4A/MP4 audio files found in $(pwd)"
+    read -p "Press Enter to exit..."
+    exit 0
+fi
+
+# Omitting -a runs loudgain in Track-Only mode
+if ! loudgain -k -s e -L -- "${files[@]}"; then
+    status=$?
+    {
+        echo "----------------------------------------"
+        echo "Timestamp : $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "Directory : $(pwd)"
+        echo "Exit Code : $status"
+        echo "Files Targeted (${#files[@]}):"
+        printf '  - %s\n' "${files[@]}"
+        echo "----------------------------------------"
+        echo ""
+    } >> "$LOG_FILE"
+
+    echo "Error encountered! Details appended to $LOG_FILE" >&2
+    read -p "Press Enter to exit..."
+    exit "$status"
+fi
+
+echo ""
+echo "M4A Track ReplayGain processing completed successfully."
+read -p "Press Enter to exit..."
+
+```
+Note: Wav & Aiff are not supported by Loudgain. 
+
 
       -----------------------------------------------------------------
 
