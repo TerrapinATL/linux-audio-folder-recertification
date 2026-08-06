@@ -174,14 +174,21 @@ Note: Wav & Aiff are not supported by Loudgain.
    
 04B. Step 2B: Apply Track Gain Only (M4A / MP4 Workaround)
 
-Note: M4A/MP4 Files: Loudgain suffers from an upstream C-level memory corruption bug (segmentation fault) when writing album-wide metadata into MP4/M4A atom headers. To prevent crashes while keeping standard EBU R128 tags (-s e), M4A containers are intentionally processed using Track Gain only (by omitting the -a flag).
+Note: M4A/MP4 Files: `loudgain` suffers from an upstream C-level memory corruption bug (segmentation fault) when writing album-wide metadata into MP4/M4A atom headers. To prevent crashes while keeping standard EBU R128 tags (-s e), M4A containers are intentionally processed using Track Gain only (by omitting the -a flag).
+
+`loudgain` relies on a legacy MP4 atom parser that frequently encounters memory corruption bugs (segmentation faults) when reading or writing tags on non-standard M4A containers. 
+
+To guarantee stability:
+   1. Files are pre-processed through `ffmpeg` using stream copy (`-c copy -movflags +faststart`) to rewrite and sanitize the MP4 container structure without re-encoding the audio.
+   2. `loudgain` is run in **Track Gain mode** (omitting `-a`) to prevent album-level tag aggregation crashes while preserving standard EBU R128 values (`-s e`).
 
 ```bash
 
 #!/usr/bin/env bash
 
-#Step 2B: Apply Track Gain Only (M4A / MP4 Workaround)
+### Step 2B: Apply Track Gain (M4A / MP4 Workaround & Repair)
 
+```bash
 #!/usr/bin/env bash
 
 LOG_FILE="loudgain_error.log"
@@ -197,7 +204,26 @@ if [ ${#files[@]} -eq 0 ]; then
     exit 0
 fi
 
-# Omitting -a runs loudgain in Track-Only mode
+# -----------------------------------------------------------------------------
+# 1. Pre-process: Sanitize MP4/M4A containers using FFmpeg
+# -----------------------------------------------------------------------------
+echo "Sanitizing MP4 container metadata across ${#files[@]} file(s)..."
+for f in "${files[@]}"; do
+    tmp_file="fixed_${f}"
+    if ffmpeg -v error -i "$f" -c copy -movflags +faststart "$tmp_file"; then
+        mv "$tmp_file" "$f"
+    else
+        echo "Warning: FFmpeg failed to process $f. Retaining original." >&2
+        rm -f "$tmp_file"
+    fi
+done
+
+echo ""
+echo "Applying Track Gain to M4A/MP4 files..."
+
+# -----------------------------------------------------------------------------
+# 2. Tagging: Run loudgain in Track Mode (omitting -a)
+# -----------------------------------------------------------------------------
 if ! loudgain -k -s e -L -- "${files[@]}"; then
     status=$?
     {
@@ -211,7 +237,7 @@ if ! loudgain -k -s e -L -- "${files[@]}"; then
         echo ""
     } >> "$LOG_FILE"
 
-    echo "Error encountered! Details appended to $LOG_FILE" >&2
+    echo "Error encountered during tagging! Details appended to $LOG_FILE" >&2
     read -p "Press Enter to exit..."
     exit "$status"
 fi
@@ -222,7 +248,6 @@ read -p "Press Enter to exit..."
 
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
-
 
       -----------------------------------------------------------------
 
