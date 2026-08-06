@@ -56,13 +56,29 @@ Run these commands from the album folder containing supported audio files.
 
 passed=0
 failed=0
+total=0
+
+echo "Scanning audio files..."
+echo
 
 while IFS= read -r -d '' file; do
+    ((total++))
 
     case "${file,,}" in
 
         *.flac)
-            if flac -s -t "$file" 2>/dev/null; then
+            if flac -s -t -- "$file" >/dev/null 2>&1; then
+                echo "[OK]     $file"
+                ((passed++))
+            else
+                echo "[FAILED] $file"
+                ((failed++))
+            fi
+            ;;
+
+        *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus)
+            if ffmpeg -nostdin -v error -hide_banner -nostats \
+                -i "$file" -f null - >/dev/null 2>&1; then
                 echo "[OK]     $file"
                 ((passed++))
             else
@@ -72,33 +88,36 @@ while IFS= read -r -d '' file; do
             ;;
 
         *)
-            if ffmpeg -v error -i "$file" -f null - 2>&1 | grep -q .; then
-                echo "[FAILED] $file"
-                ((failed++))
-            else
-                echo "[OK]     $file"
-                ((passed++))
-            fi
+            # Ignore unsupported files
             ;;
 
     esac
 
 done < <(
-    find . -maxdepth 1 -type f \
-        \( \
-            -iname "*.flac" -o \
-            -iname "*.mp3"  -o \
-            -iname "*.m4a"  -o \
-            -iname "*.ogg"  -o \
-            -iname "*.opus" -o \
-            -iname "*.wav"  -o \
-            -iname "*.aiff" \
-        \) \
-        -print0 | sort -z -V
+    find . -type f \( \
+        -iname "*.flac" -o \
+        -iname "*.mp3"  -o \
+        -iname "*.m4a"  -o \
+        -iname "*.wav"  -o \
+        -iname "*.ogg"  -o \
+        -iname "*.aac"  -o \
+        -iname "*.opus" \
+    \) -print0
 )
 
+echo
 echo "----------------------------------------"
-echo "Scan complete. Passed: $passed | Failed: $failed"
+echo "Scan complete"
+echo "Files checked: $total"
+echo "Passed:        $passed"
+echo "Failed:        $failed"
+echo "----------------------------------------"
+
+if (( failed > 0 )); then
+    exit 1
+else
+    exit 0
+fi
 
 ```
 
