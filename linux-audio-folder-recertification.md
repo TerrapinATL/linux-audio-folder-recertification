@@ -450,5 +450,70 @@ fi
 
 ---
 
+---
 
+---
+9. Step 6: Log Cleanup
 
+```bash
+#!/usr/bin/env bash
+# Step 6: Log Cleanup
+#
+# Finds existing log files, waits for user confirmation,
+# removes them, and verifies cleanup.
+
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+
+echo "Log directory:"
+echo "$LOG_DIR"
+echo
+
+echo "Step 6A: Finding Log Files"
+echo "----------------------------------------"
+
+LOG_COUNT=$(find "$LOG_DIR" -type f -name "*.log" | wc -l)
+
+if [ "$LOG_COUNT" -eq 0 ]; then
+    echo "No log files found."
+    exit 0
+fi
+
+find "$LOG_DIR" -type f -name "*.log"
+
+echo
+echo "----------------------------------------"
+echo "Found $LOG_COUNT log file(s)."
+
+read -rp "Continue and delete these log files? (y/N): " CONFIRM
+
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+    echo "Cleanup cancelled. No files were deleted."
+    exit 0
+fi
+
+echo
+echo "Step 6B: Deleting Log Files"
+echo "----------------------------------------"
+
+find "$LOG_DIR" -type f -name "*.log" -delete
+
+echo "Log deletion complete."
+
+echo
+echo "Step 6C: Verify Log Deletion"
+echo "----------------------------------------"
+
+REMAINING=$(find "$LOG_DIR" -type f -name "*.log" | wc -l)
+
+if [ "$REMAINING" -eq 0 ]; then
+    echo "SUCCESS: No log files remain."
+else
+    echo "WARNING: $REMAINING log file(s) remain."
+    find "$LOG_DIR" -type f -name "*.log"
+fi
+
+echo
+echo "Log cleanup finished."
+```
+
+---
