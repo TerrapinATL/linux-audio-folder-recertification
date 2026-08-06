@@ -183,10 +183,6 @@ To guarantee stability:
 
 # Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
 
-#!/usr/bin/env bash
-
-# Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
-
 LOG_FILE="loudgain_error.log"
 
 shopt -s nullglob nocaseglob
