@@ -319,18 +319,19 @@ Run these commands from the Artist directory.
 
       -----------------------------------------------------------------
 
-Step 5A: Recursive Artist Audio Validation Process
+Step 4A: Recursive Artist Audio Validation Process
 
 ```bash
 
 #!/usr/bin/env bash
-# Step 5A – Recursive Artist Audio Validation
+# Step 4A – Recursive Artist Audio Validation
 
 LOG="artist_audio_validation.log"
 PASSED="artist_audio_passed.log"
 FAILED="artist_audio_failed.log"
 ERRORS="artist_audio_errors.log"
 
+# Clear existing logs
 : > "$LOG"
 : > "$PASSED"
 : > "$FAILED"
@@ -340,93 +341,38 @@ total=0
 passed=0
 failed=0
 
-while IFS= read -r -d '' file; do
+echo "Starting audio validation..." | tee -a "$LOG"
 
+# Process all audio files recursively using null delimiters to handle spaces
+while IFS= read -r -d '' file; do
     total=$((total + 1))
 
-    case "${file,,}" in
+    # Strip potential carriage returns from filenames
+    clean_file=$(printf '%s' "$file" | tr -d '\r')
 
-        *.flac)
+    # Validate audio stream integrity with ffmpeg
+    if ffmpeg -v error -i "$clean_file" -f null - 2>>"$ERRORS"; then
+        passed=$((passed + 1))
+        echo "OK: $clean_file" | tee -a "$PASSED" "$LOG"
+    else
+        failed=$((failed + 1))
+        echo "FAILED: $clean_file" | tee -a "$FAILED" "$LOG"
+    fi
+done < <(find . -type f \( -name "*.m4a" -o -name "*.mp3" -o -name "*.flac" -o -name "*.wav" \) -print0)
 
-            if flac -t "$file" >/dev/null 2>>"$ERRORS"; then
-
-                echo "OK: $file" | tee -a "$LOG"
-                passed=$((passed + 1))
-
-            else
-
-                echo "FAILED: $file" | tee -a "$LOG"
-                failed=$((failed + 1))
-
-            fi
-            ;;
-
-        *.mp3|*.m4a|*.ogg|*.opus|*.wav|*.aiff)
-
-            if ffmpeg \
-                -v error \
-                -i "$file" \
-                -f null - \
-                >/dev/null \
-                2>>"$ERRORS"; then
-
-                echo "OK: $file" | tee -a "$LOG"
-                passed=$((passed + 1))
-
-            else
-
-                echo "FAILED: $file" | tee -a "$LOG"
-                failed=$((failed + 1))
-
-            fi
-            ;;
-
-    esac
-
-done < <(
-    find . -type f \
-    \( \
-        -iname "*.flac" -o \
-        -iname "*.mp3"  -o \
-        -iname "*.m4a"  -o \
-        -iname "*.ogg"  -o \
-        -iname "*.opus" -o \
-        -iname "*.wav"  -o \
-        -iname "*.aiff" \
-    \) \
-    -print0 |
-    LC_ALL=C sort -z
-)
-
-grep '^OK' "$LOG" > "$PASSED" || true
-grep '^FAILED' "$LOG" > "$FAILED" || true
-
-echo
-echo "RESULTS"
-echo "-------"
-echo "Files Tested: $total"
-echo "Passed:       $passed"
-echo "Failed:       $failed"
-
-if [ "$failed" -eq 0 ]; then
-
-    echo "VALIDATION PASSED"
-
-else
-
-    echo "VALIDATION FAILED"
-    echo "Review: $FAILED"
-
-fi
-
+# Final Summary
+echo "----------------------------------------" | tee -a "$LOG"
+echo "Validation Complete." | tee -a "$LOG"
+echo "Total Processed: $total | Passed: $passed | Failed: $failed" | tee -a "$LOG"
+echo "Review failed files in: $FAILED"
 
 ```
 
       -----------------------------------------------------------------
 
-Step 5B: Separate Results
+Step 4B: Separate Results
 
-The following files are created by Step 5A:
+The following files are created by Step 4A:
 
    1. artist_audio_validation.log
       * Complete validation report.
@@ -439,7 +385,7 @@ The following files are created by Step 5A:
 
      -----------------------------------------------------------------
 
-Step 5C: Review Results
+Step 4C: Review Results
 ```bash
 
 cat artist_audio_errors.log
@@ -454,7 +400,7 @@ cat artist_audio_failed.log
 
       -----------------------------------------------------------------
 
-08. Step 6: Create and Verify Artist Checksum
+08. Step 5: Create and Verify Artist Checksum
 
 * Run from the artist folder only.
 * Each immediate child folder is treated as an album folder.
@@ -464,7 +410,7 @@ cat artist_audio_failed.log
 ```bash
 
 #!/usr/bin/env bash
-# Step 6 – Create and Verify Artist Checksum
+# Step 5 – Create and Verify Artist Checksum
 #
 # Run from the artist folder only.
 # Each immediate child folder is treated as an album folder.
