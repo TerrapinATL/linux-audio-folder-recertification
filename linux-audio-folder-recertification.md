@@ -124,25 +124,24 @@ verify_audio
 
 #!/usr/bin/env bash
 
+#Step 2: Apply ReplayGain
+
 LOG_FILE="loudgain_error.log"
 
 shopt -s nullglob nocaseglob
 
 files=(
-    *.flac
-    *.mp3
-    *.ogg
-    *.opus
-    *.m4a
+    *.flac *.mp3 *.m4a *.ogg *.opus
+    *.mp4  *.aac *.ape *.wv  *.mpc *.spx
 )
 
 if [ ${#files[@]} -eq 0 ]; then
-    echo "No matching audio files found."
+    echo "No matching audio files found in $(pwd)"
     exit 0
 fi
 
-# Run loudgain and capture output while streaming it live to stdout
-if ! loudgain -a -k -s e "${files[@]}"; then
+# Run loudgain with moOde standard flags (-s e -L) and stream live output
+if ! loudgain -a -k -s e -L -- "${files[@]}"; then
     status=$?
     {
         echo "----------------------------------------"
