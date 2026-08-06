@@ -186,12 +186,10 @@ To guarantee stability:
 
 #!/usr/bin/env bash
 
-### Step 2B: Apply Track Gain (M4A / MP4 Workaround & Repair)
-
-```bash
-#!/usr/bin/env bash
+# Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
 
 LOG_FILE="loudgain_error.log"
+
 shopt -s nullglob nocaseglob
 
 files=(
@@ -245,6 +243,7 @@ fi
 echo ""
 echo "M4A Track ReplayGain processing completed successfully."
 read -p "Press Enter to exit..."
+exit 0
 
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
