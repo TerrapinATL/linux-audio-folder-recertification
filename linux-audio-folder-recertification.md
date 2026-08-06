@@ -185,6 +185,12 @@ To guarantee stability:
 
 LOG_FILE="loudgain_error.log"
 
+# Function to exit without closing the interactive shell session if sourced
+safe_exit() {
+    local status="${1:-0}"
+    return "$status" 2>/dev/null || exit "$status"
+}
+
 shopt -s nullglob nocaseglob
 
 files=(
@@ -193,8 +199,8 @@ files=(
 
 if [ ${#files[@]} -eq 0 ]; then
     echo "No M4A/MP4 audio files found in $(pwd)"
-    read -p "Press Enter to exit..."
-    exit 0
+    read -p "Press Enter to continue..."
+    safe_exit 0
 fi
 
 # -----------------------------------------------------------------------------
@@ -231,14 +237,14 @@ if ! loudgain -k -s e -L -- "${files[@]}"; then
     } >> "$LOG_FILE"
 
     echo "Error encountered during tagging! Details appended to $LOG_FILE" >&2
-    read -p "Press Enter to exit..."
-    exit "$status"
+    read -p "Press Enter to continue..."
+    safe_exit "$status"
 fi
 
 echo ""
 echo "M4A Track ReplayGain processing completed successfully."
-read -p "Press Enter to exit..."
-exit 0
+read -p "Press Enter to continue..."
+safe_exit 0
 
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
