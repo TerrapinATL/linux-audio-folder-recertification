@@ -54,65 +54,65 @@ Run these commands from the album folder containing supported audio files.
 #!/usr/bin/env bash
 # Step 1: Verify Audio Files
 
-passed=0
-failed=0
-total=0
+verify_audio() {
+    local passed=0 failed=0 total=0
 
-echo "Scanning audio files..."
-echo
+    echo "Scanning audio files..."
+    echo
 
-while IFS= read -r -d '' file; do
-    ((total++))
+    while IFS= read -r -d '' file; do
+        ((total++))
 
-    case "${file,,}" in
+        case "${file,,}" in
+            *.flac)
+                if flac -s -t -- "$file" >/dev/null 2>&1; then
+                    echo "[OK]     $(basename "$file")"
+                    ((passed++))
+                else
+                    echo "[FAILED] $(basename "$file")"
+                    ((failed++))
+                fi
+                ;;
 
-        *.flac)
-            if flac -s -t -- "$file" >/dev/null 2>&1; then
-                echo "[OK]     $(basename "$file")"
-                ((passed++))
-            else
-                echo "[FAILED] $(basename "$file")"
-                ((failed++))
-            fi
-            ;;
+            *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus)
+                if ffmpeg -nostdin -v error -hide_banner -nostats \
+                    -i "$file" -f null - >/dev/null 2>&1; then
+                    echo "[OK]     $(basename "$file")"
+                    ((passed++))
+                else
+                    echo "[FAILED] $(basename "$file")"
+                    ((failed++))
+                fi
+                ;;
+        esac
 
-        *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus)
-            if ffmpeg -nostdin -v error -hide_banner -nostats \
-                -i "$file" -f null - >/dev/null 2>&1; then
-                echo "[OK]     $(basename "$file")"
-                ((passed++))
-            else
-                echo "[FAILED] $(basename "$file")"
-                ((failed++))
-            fi
-            ;;
+    done < <(
+        find . -type f \( \
+            -iname "*.flac" -o \
+            -iname "*.mp3"  -o \
+            -iname "*.m4a"  -o \
+            -iname "*.wav"  -o \
+            -iname "*.ogg"  -o \
+            -iname "*.aac"  -o \
+            -iname "*.opus" \
+        \) -print0 | sort -z -V
+    )
 
-    esac
+    echo
+    echo "----------------------------------------"
+    echo "Scan complete"
+    echo "Files checked: $total"
+    echo "Passed:        $passed"
+    echo "Failed:        $failed"
 
-done < <(
-    find . -type f \( \
-        -iname "*.flac" -o \
-        -iname "*.mp3"  -o \
-        -iname "*.m4a"  -o \
-        -iname "*.wav"  -o \
-        -iname "*.ogg"  -o \
-        -iname "*.aac"  -o \
-        -iname "*.opus" \
-    \) -print0 | sort -z -V
-)
+    if (( failed > 0 )); then
+        return 1
+    else
+        return 0
+    fi
+}
 
-echo
-echo "----------------------------------------"
-echo "Scan complete"
-echo "Files checked: $total"
-echo "Passed:        $passed"
-echo "Failed:        $failed"
-
-if (( failed > 0 )); then
-    return 1 2>/dev/null || exit 1
-else
-    return 0 2>/dev/null || exit 0
-fi
+verify_audio
 
 ```
 
