@@ -506,6 +506,7 @@ FAILED=0
 
 : > "$TEMP_CHECKSUM"
 
+# 1. Creation Phase (Step 4 Canonical Formula)
 while IFS= read -r -d '' album; do
     name=$(basename "$album")
 
@@ -515,20 +516,15 @@ while IFS= read -r -d '' album; do
         continue
     fi
 
-    hash=$(
-        cd "$album" &&
-        find . -maxdepth 1 -type f \( \
-            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
-            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
-            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif" \
-        \) -print0 |
-        LC_ALL=C sort -z |
-        xargs -0 -r sha512sum |
-        sha512sum |
-        cut -d' ' -f1
-    )
+    # Step 4 calculus: Hash all files except ALBUM.sha512sums.txt
+    hash=$(cd "$album" 2>/dev/null && find . -type f ! -name ALBUM.sha512sums.txt -print0 | LC_ALL=C sort -z | xargs -0 sha512sum | sha512sum | cut -d" " -f1)
 
-    printf "%s  %s\n" "$hash" "$name" >> "$TEMP_CHECKSUM"
+    if [ -n "$hash" ]; then
+        printf "%s  %s\n" "$hash" "$name" >> "$TEMP_CHECKSUM"
+    else
+        echo "FAILED: COULD NOT CALCULATE HASH FOR $name" | tee -a "$LOG_FILE"
+        FAILED=1
+    fi
 done < <(
     find . -mindepth 1 -maxdepth 1 -type d -print0 |
     LC_ALL=C sort -z
@@ -543,23 +539,12 @@ fi
 mv "$TEMP_CHECKSUM" "$CHECKSUM"
 echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") albums)" | tee -a "$LOG_FILE"
 
-# Verification Phase
+# 2. Verification Phase (Step 4 Canonical Formula)
 MISMATCH_COUNT=0
 while read -r stored_hash album; do
-    actual_hash=$(
-        cd "$album" 2>/dev/null &&
-        find . -maxdepth 1 -type f \( \
-            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
-            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
-            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif" \
-        \) -print0 |
-        LC_ALL=C sort -z |
-        xargs -0 -r sha512sum |
-        sha512sum |
-        cut -d' ' -f1
-    )
+    actual_hash=$(cd "$album" 2>/dev/null && find . -type f ! -name ALBUM.sha512sums.txt -print0 | LC_ALL=C sort -z | xargs -0 sha512sum | sha512sum | cut -d" " -f1)
 
-    if [ "$stored_hash" = "$actual_hash" ]; then
+    if [ -n "$actual_hash" ] && [ "$stored_hash" = "$actual_hash" ]; then
         printf "%-10s %s\n" "OK" "$album" | tee -a "$LOG_FILE"
     else
         printf "%-10s %s\n" "MISMATCH" "$album" | tee -a "$LOG_FILE"
@@ -567,7 +552,7 @@ while read -r stored_hash album; do
     fi
 done < "$CHECKSUM"
 
-# Automatic log directory cleanup upon successful final pass
+# Final Status Check & Log Cleanup
 if [ "$MISMATCH_COUNT" -eq 0 ]; then
     echo "----------------------------------------"
     echo "ALL PROCESSES PASSED. Purging log directory: $LOG_DIR"
