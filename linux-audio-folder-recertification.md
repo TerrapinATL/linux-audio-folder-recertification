@@ -117,7 +117,7 @@ verify_audio
 ```bash
 
 #!/usr/bin/env bash
-# Step 2: Apply Album & Track Gain (With Pre-Sanitization for M4A/MP4)
+# Step 2: Apply Album & Track Gain (With Pre-Sanitization for M4A/MP4/MP3)
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
@@ -145,9 +145,9 @@ for ext in "${EXTS[@]}"; do
     group=( *."$ext" )
     if [ ${#group[@]} -gt 0 ]; then
 
-        # Container Repair for M4A/MP4 prior to Loudgain tag insertion
+        # Container / Bitstream Pre-Sanitization prior to Loudgain
         if [[ "$ext" == "m4a" || "$ext" == "mp4" ]]; then
-            echo "Sanitizing ${#group[@]} .$ext container(s) in $(pwd)..." | tee -a "$LOG_FILE"
+            echo "Sanitizing ${#group[@]} .$ext container(s) with FFmpeg..." | tee -a "$LOG_FILE"
             for f in "${group[@]}"; do
                 tmp="._fixed_${f}"
                 if ffmpeg -v error -hide_banner -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp" 2>>"$LOG_FILE"; then
@@ -157,12 +157,20 @@ for ext in "${EXTS[@]}"; do
                     rm -f "$tmp"
                 fi
             done
+        elif [[ "$ext" == "mp3" ]]; then
+            if command -v mp3val &>/dev/null; then
+                echo "Sanitizing ${#group[@]} .mp3 bitstream(s) with mp3val..." | tee -a "$LOG_FILE"
+                mp3val -f -t "${group[@]}" >>"$LOG_FILE" 2>&1
+            else
+                echo "Notice: mp3val not found. Skipping MP3 bitstream repair." | tee -a "$LOG_FILE"
+            fi
         fi
 
         echo "Processing ${#group[@]} file(s) [.$ext] in $(pwd)..." | tee -a "$LOG_FILE"
         if ! loudgain -a -k -s e -L -- "${group[@]}" 2>&1 | tee -a "$LOG_FILE"; then
             echo "ERROR: Loudgain failed for .$ext in $(pwd)." >&2 | tee -a "$LOG_FILE"
         fi
+
     fi
 done
 
