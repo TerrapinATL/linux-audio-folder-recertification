@@ -13,7 +13,6 @@ Use these commands after making intentional library changes such as:
 - Correcting tags
 - Adding or removing tracks
 
-
       -----------------------------------------------------------------
 
 -- Anticipated folder structure for this process:
@@ -43,6 +42,7 @@ Artist/
 02. Album Folder
 
 ---
+
 Run these commands from the album folder containing supported audio files.
 
       -----------------------------------------------------------------
@@ -112,18 +112,17 @@ verify_audio
 
       -----------------------------------------------------------------
    
-04A. Step 2: Apply Album & Track Gain (Paste-Safe / Format-Isolated)
+04. Step 2: Apply Album & Track Gain (With Pre-Sanitization for M4A/MP4)
 
 ```bash
 
 #!/usr/bin/env bash
-# Step 2: Apply Album & Track Gain (Paste-Safe / Format-Isolated)
+# Step 2: Apply Album & Track Gain (With Pre-Sanitization for M4A/MP4)
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/STEP_2_album_gain.log"
 
-# Supported audio extensions
 EXTS=(flac m4a mp3 ogg opus mp4 aac ape wv mpc spx)
 
 shopt -s nullglob nocaseglob
@@ -137,27 +136,110 @@ for ext in "${EXTS[@]}"; do
     fi
 done
 
-# 2. Process files by format group to prevent TagLib container crashes
 if [ ${#all_files[@]} -eq 0 ]; then
     echo "No supported audio files found in $(pwd)."
 else
+    # 2. Process each extension group
     for ext in "${EXTS[@]}"; do
         group=( *."$ext" )
         if [ ${#group[@]} -gt 0 ]; then
+
+            # Pre-sanitize M4A/MP4 containers up front before loudgain
+            if [[ "$ext" == "m4a" || "$ext" == "mp4" ]]; then
+                echo "Sanitizing ${#group[@]} .$ext container(s) in $(pwd)..." | tee -a "$LOG_FILE"
+                for f in "${group[@]}"; do
+                    tmp="._fixed_${f}"
+                    if ffmpeg -v error -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp" 2>>"$LOG_FILE"; then
+                        mv "$tmp" "$f"
+                    else
+                        echo "Warning: FFmpeg container repair failed for $f" | tee -a "$LOG_FILE"
+                        rm -f "$tmp"
+                    fi
+                done
+            fi
+
+            # Run loudgain on the clean container group
             echo "Processing ${#group[@]} file(s) [.$ext] in $(pwd)..."
             if ! loudgain -a -k -s e -L -- "${group[@]}" 2>&1 | tee -a "$LOG_FILE"; then
                 echo "ERROR: Loudgain failed for .$ext in $(pwd). Details saved to $LOG_FILE" >&2
             fi
+
         fi
     done
 fi
 
 ```
+
 Note: Wav & Aiff are not supported by Loudgain. 
 
       -----------------------------------------------------------------
 
-05. Step 3: Create and Verify Album Checksum
+05. Step 3: Re-Verify Audio Files
+
+```bash
+
+#!/usr/bin/env bash
+# Step 1: Verify Audio Files (Run from Album folder)
+
+LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/STEP_1_verify_audio.log"
+: > "$LOG_FILE"
+
+verify_audio() {
+    local passed=0 failed=0 total=0
+
+    echo "Scanning audio files in $(pwd)..." | tee -a "$LOG_FILE"
+
+    while IFS= read -r -d '' file; do
+        ((total++))
+
+        case "${file,,}" in
+            *.flac)
+                if flac -s -t -- "$file" >/dev/null 2>&1; then
+                    echo "[OK]     $(basename "$file")" | tee -a "$LOG_FILE"
+                    ((passed++))
+                else
+                    echo "[FAILED] $(basename "$file")" | tee -a "$LOG_FILE"
+                    ((failed++))
+                fi
+                ;;
+
+            *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus|*.aiff|*.aif)
+                if ffmpeg -nostdin -v error -hide_banner -nostats \
+                    -i "$file" -f null - >/dev/null 2>&1; then
+                    echo "[OK]     $(basename "$file")" | tee -a "$LOG_FILE"
+                    ((passed++))
+                else
+                    echo "[FAILED] $(basename "$file")" | tee -a "$LOG_FILE"
+                    ((failed++))
+                fi
+                ;;
+        esac
+
+    done < <(
+        find . -maxdepth 1 -type f \( \
+            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
+            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
+            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
+        \) -print0 | LC_ALL=C sort -z -V
+    )
+
+    {
+        echo "----------------------------------------"
+        echo "Scan complete | Total: $total | Passed: $passed | Failed: $failed"
+    } | tee -a "$LOG_FILE"
+
+    (( failed == 0 ))
+}
+
+verify_audio
+
+```
+
+      -----------------------------------------------------------------
+            
+06. Step 4: Create and Verify Album Checksum
 
 * Run from the album folder.
 * Create a checksum file for the current folder.
@@ -167,13 +249,13 @@ Note: Wav & Aiff are not supported by Loudgain.
 ```bash
 
 #!/usr/bin/env bash
-# Step 3: Create and Verify Album Checksum
+# Step 4: Create and Verify Album Checksum
 
 set -o pipefail
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/STEP_3_album_checksum.log"
+LOG_FILE="$LOG_DIR/STEP_4_album_checksum.log"
 
 CHECKSUM="ALBUM.sha512sums.txt"
 
@@ -203,7 +285,7 @@ fi
 
 ---
 
-06. Artist Folder
+07. Artist Folder
 
 ---
 
@@ -211,7 +293,7 @@ Run these commands from the Artist directory.
 
       -----------------------------------------------------------------
 
-07. Step 4: Recursive Artist Audio Validation
+08. Step 5: Recursive Artist Audio Validation
 
 * Recursively inspect only supported audio files beneath that folder.
 * Verify audio integrity before any Artist-level checksum is created.
@@ -220,20 +302,20 @@ Run these commands from the Artist directory.
 
       -----------------------------------------------------------------
 
-Step 4A: Recursive Artist Audio Validation Process
+09. Step 5A: Recursive Artist Audio Validation Process
 
 ```bash
 
 #!/usr/bin/env bash
-# Step 4A – Recursive Artist Audio Validation (Run from Artist folder)
+# Step 5A – Recursive Artist Audio Validation (Run from Artist folder)
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
 
-LOG="$LOG_DIR/STEP_4A_artist_audio_validation.log"
-PASSED="$LOG_DIR/STEP_4A_artist_audio_passed.log"
-FAILED="$LOG_DIR/STEP_4A_artist_audio_failed.log"
-ERRORS="$LOG_DIR/STEP_4A_artist_audio_errors.log"
+LOG="$LOG_DIR/STEP_5A_artist_audio_validation.log"
+PASSED="$LOG_DIR/STEP_5A_artist_audio_passed.log"
+FAILED="$LOG_DIR/STEP_5A_artist_audio_failed.log"
+ERRORS="$LOG_DIR/STEP_5A_artist_audio_errors.log"
 
 : > "$LOG"
 : > "$PASSED"
@@ -277,50 +359,126 @@ fi
 
       -----------------------------------------------------------------
 
-Step 4B: Separate Results
+10. Step 5B: Separate Results
 
-Step 4A generates four distinct log files inside $HOME/.logs/Linux_Audio_Folder_Level/:
+Step 5B generates four distinct log files inside $HOME/.logs/Linux_Audio_Folder_Level/:
 
-    STEP_4A_artist_audio_validation.log
+    STEP_5A_artist_audio_validation.log
 
         Complete validation report summary.
 
-    STEP_4A_artist_audio_passed.log
+    STEP_5A_artist_audio_passed.log
 
         List of all audio files that passed integrity checks.
 
-    STEP_4A_artist_audio_failed.log
+    STEP_5A_artist_audio_failed.log
 
         List of audio files that failed integrity checks.
 
-    STEP_4A_artist_audio_errors.log
+    STEP_5A_artist_audio_errors.log
 
         Raw ffmpeg decoder output recorded during failure inspection.
 
      -----------------------------------------------------------------
 
-Step 4C: Review Results
+11. Step 5C: Review Results
 ```bash
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 
 # View raw FFmpeg error output
-cat "$LOG_DIR/STEP_4A_artist_audio_errors.log"
+cat "$LOG_DIR/STEP_5A_artist_audio_errors.log"
 
 # View overall summary report
-cat "$LOG_DIR/STEP_4A_artist_audio_validation.log"
+cat "$LOG_DIR/STEP_5A_artist_audio_validation.log"
 
 # View list of passed files
-cat "$LOG_DIR/STEP_4A_artist_audio_passed.log"
+cat "$LOG_DIR/STEP_5A_artist_audio_passed.log"
 
 # View list of failed files
-cat "$LOG_DIR/STEP_4A_artist_audio_failed.log"
+cat "$LOG_DIR/STEP_5A_artist_audio_failed.log"
 
 ```
 
-      -----------------------------------------------------------------
+     -----------------------------------------------------------------
 
-08. Step 5: Create and Verify Artist Checksum
+12. Step 6: Verification of Album Checksums
+
+```bash
+#!/usr/bin/env bash
+
+# Step 6 – Verification of Album Folders
+
+LOGDIR="$HOME/sha512_library_logs"
+mkdir -p "$LOGDIR"
+
+# --- UNIVERSAL PERMISSION & ROOT-LOCK CHECK ---
+if [ ! -w "$PWD" ]; then
+    echo ""
+    echo "=========================================================="
+    echo "CRITICAL ERROR: Write/operational permission denied on $PWD."
+    echo "This often happens if a drive was formatted on a desktop system"
+    echo "and the root filesystem is locked to 'root'."
+    echo "=========================================================="
+    echo "Off-script solution:"
+    echo "Fix mount point or drive ownership by running:"
+    echo "  sudo chown -R \$USER:\$USER \"$PWD\""
+    echo ""
+    exit 1
+fi
+
+if ! find "$PWD" ! -user "$USER" -print -quit 2>/dev/null | grep -q .; then
+    : # All good, owned by current user
+else
+    echo "Notice: Some files/folders are not owned by \$USER."
+    read -rp "Fix permissions now using sudo chown? (y/N): " fix_choice
+    if [[ "$fix_choice" =~ ^[Yy]$ ]]; then
+        sudo chown -R "$USER:$USER" "$PWD" || { echo "chown failed. Check sudo privileges."; exit 1; }
+    else
+        echo "Aborting due to permission mismatch."; exit 1
+    fi
+fi
+# ---------------------------------------------
+
+mapfile -d '' manifests < <(find "$PWD" -type f -name "ALBUM.sha512sums.txt" -print0 | LC_ALL=C sort -z)
+
+total=${#manifests[@]}
+i=0
+
+if [ "$total" -eq 0 ]; then
+    echo "ALERT: No ALBUM.sha512sums.txt files found under $PWD."
+    echo "Nothing to verify — check that you are in the correct directory."
+    exit 1
+fi
+
+for m in "${manifests[@]}"; do
+    i=$((i+1))
+    dir_path=$(dirname "$m")
+    album_name=$(basename "$dir_path")
+    artist_name=$(basename "$(dirname "$dir_path")")
+    label="$artist_name-$album_name"
+
+    (
+        cd "$dir_path" || exit 1
+        sha512sum -c --quiet --strict "ALBUM.sha512sums.txt" 2>&1
+    ) > "$LOGDIR/temp_err.log"
+
+    rc=$?
+
+    if [ $rc -ne 0 ]; then
+        echo "FAIL [$i/$total] $label"
+        sed "s/^/[$i\/$total] ERROR: $label :: /" "$LOGDIR/temp_err.log" >> "$LOGDIR/step3_errors.log"
+    else
+        echo "OK [$i/$total] $label"
+    fi
+done | tee "$LOGDIR/step3_run.log"
+rm -f "$LOGDIR/temp_err.log"
+
+```
+
+     -----------------------------------------------------------------
+
+13. Step 7: Create and Verify Artist Checksum
 
 * Run from the artist folder only.
 * Each immediate child folder is treated as an album folder.
@@ -330,7 +488,7 @@ cat "$LOG_DIR/STEP_4A_artist_audio_failed.log"
 ```bash
 
 #!/usr/bin/env bash
-# Step 5 – Create and Verify Artist Checksum (Run from Artist folder)
+# Step 7 – Create and Verify Artist Checksum (Run from Artist folder)
 #
 # Run from the artist folder only.
 # Each immediate child folder is treated as an album folder.
@@ -340,7 +498,7 @@ set -o pipefail
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/STEP_5_artist_checksum.log"
+LOG_FILE="$LOG_DIR/STEP_7_artist_checksum.log"
 
 CHECKSUM="ARTIST.sha512sums.txt"
 TEMP_CHECKSUM="${CHECKSUM}.tmp"
@@ -424,10 +582,9 @@ fi
 
 ---
 
----
+14. Step 8: Log Cleanup
 
 ---
-9. Step 6: Log Cleanup
 
 ```bash
 #!/usr/bin/env bash
