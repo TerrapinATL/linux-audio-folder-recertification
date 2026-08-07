@@ -126,11 +126,14 @@ LOG_FILE="$LOG_DIR/STEP_2A_album_gain.log"
 shopt -s nullglob nocaseglob
 files=( *.flac *.mp3 *.ogg *.opus *.aac *.ape *.wv *.mpc *.spx )
 
-[ ${#files[@]} -eq 0 ] && exit 0
+# Safe exit whether script is executed or sourced
+if [ ${#files[@]} -eq 0 ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 if ! loudgain -a -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
     echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
-    exit 1
+    return 1 2>/dev/null || exit 1
 fi
 
 ```
