@@ -179,7 +179,7 @@ Note: Wav & Aiff are not supported by Loudgain.
 ```bash
 
 #!/usr/bin/env bash
-# Step 1: Verify Audio Files (Run from Album folder)
+# Step 3: Verify Audio Files (Run from Album folder)
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
