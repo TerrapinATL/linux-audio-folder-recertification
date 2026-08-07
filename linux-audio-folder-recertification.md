@@ -112,77 +112,48 @@ verify_audio
 
       -----------------------------------------------------------------
    
-04A. Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
+04A. Step 2: Apply Album & Track Gain (Paste-Safe / Format-Isolated)
 
 ```bash
 
 #!/usr/bin/env bash
-# Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
+# Step 2: Apply Album & Track Gain (Paste-Safe / Format-Isolated)
 
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/STEP_2A_album_gain.log"
+LOG_FILE="$LOG_DIR/STEP_2_album_gain.log"
+
+# Supported audio extensions
+EXTS=(flac m4a mp3 ogg opus mp4 aac ape wv mpc spx)
 
 shopt -s nullglob nocaseglob
-files=( *.flac *.mp3 *.ogg *.opus *.aac *.ape *.wv *.mpc *.spx )
 
-# Safe exit whether script is executed or sourced
-if [ ${#files[@]} -eq 0 ]; then
-    return 0 2>/dev/null || exit 0
-fi
+# 1. Collect all matching audio files in current directory
+all_files=()
+for ext in "${EXTS[@]}"; do
+    ext_files=( *."$ext" )
+    if [ ${#ext_files[@]} -gt 0 ]; then
+        all_files+=( "${ext_files[@]}" )
+    fi
+done
 
-if ! loudgain -a -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
-    echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
-    return 1 2>/dev/null || exit 1
+# 2. Process files by format group to prevent TagLib container crashes
+if [ ${#all_files[@]} -eq 0 ]; then
+    echo "No supported audio files found in $(pwd)."
+else
+    for ext in "${EXTS[@]}"; do
+        group=( *."$ext" )
+        if [ ${#group[@]} -gt 0 ]; then
+            echo "Processing ${#group[@]} file(s) [.$ext] in $(pwd)..."
+            if ! loudgain -a -k -s e -L -- "${group[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+                echo "ERROR: Loudgain failed for .$ext in $(pwd). Details saved to $LOG_FILE" >&2
+            fi
+        fi
+    done
 fi
 
 ```
 Note: Wav & Aiff are not supported by Loudgain. 
-
-      -----------------------------------------------------------------
-   
-04B. Step 2B: Apply Track Gain Only (M4A / MP4 Workaround)
-
-Note: M4A/MP4 Files: `loudgain` suffers from an upstream C-level memory corruption bug (segmentation fault) when writing album-wide metadata into MP4/M4A atom headers. To prevent crashes while keeping standard EBU R128 tags (-s e), M4A containers are intentionally processed using Track Gain only (by omitting the -a flag).
-
-`loudgain` relies on a legacy MP4 atom parser that frequently encounters memory corruption bugs (segmentation faults) when reading or writing tags on non-standard M4A containers. 
-
-To guarantee stability:
-   1. Files are pre-processed through `ffmpeg` using stream copy (`-c copy -movflags +faststart`) to rewrite and sanitize the MP4 container structure without re-encoding the audio.
-   2. `loudgain` is run in **Track Gain mode** (omitting `-a`) to prevent album-level tag aggregation crashes while preserving standard EBU R128 values (`-s e`).
-
-```bash
-
-#!/usr/bin/env bash
-# Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
-
-LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
-mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/STEP_2B_track_gain_m4a.log"
-
-shopt -s nullglob nocaseglob
-files=( *.m4a *.mp4 )
-
-[ ${#files[@]} -eq 0 ] && exit 0
-
-echo "Sanitizing MP4 containers..." | tee -a "$LOG_FILE"
-for f in "${files[@]}"; do
-    tmp="._fixed_${f}"
-    if ffmpeg -v error -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp" 2>>"$LOG_FILE"; then
-        mv "$tmp" "$f"
-    else
-        echo "Warning: FFmpeg container fix failed for $f" | tee -a "$LOG_FILE"
-        rm -f "$tmp"
-    fi
-done
-
-if ! loudgain -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
-    echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
-    exit 1
-fi
-
-
-```
 
       -----------------------------------------------------------------
 
