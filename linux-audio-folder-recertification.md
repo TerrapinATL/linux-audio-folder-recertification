@@ -171,12 +171,15 @@ for ext in "${EXTS[@]}"; do
         echo "Processing ${#group[@]} file(s) [.$ext] in $(pwd)..." | tee -a "$LOG_FILE"
         if ! loudgain -a -k -s e -L -- "${group[@]}" 2>&1 | tee -a "$LOG_FILE"; then
             echo "ERROR: Loudgain failed for .$ext in $(pwd)." >&2 | tee -a "$LOG_FILE"
-            echo "----------------------------------------"
-            echo "Folder Recertification: Step 2"
-            echo "----------------------------------------"
+
         fi
 
     fi
+
+            echo "----------------------------------------"
+            echo "Folder Recertification: Step 2"
+            echo "----------------------------------------"
+
 done
 
 ```
