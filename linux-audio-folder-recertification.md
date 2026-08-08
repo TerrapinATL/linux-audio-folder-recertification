@@ -240,9 +240,7 @@ verify_audio() {
     )
 
     {
-        echo "----------------------------------------"
-        echo "Folder Recertification: Step 3"
-        echo "----------------------------------------"
+
         echo "Scan complete | Total: $total | Passed: $passed | Failed: $failed"
     } | tee -a "$LOG_FILE"
 
@@ -250,7 +248,9 @@ verify_audio() {
 }
 
 verify_audio
-
+        echo "----------------------------------------"
+        echo "Folder Recertification: Step 3"
+        echo "----------------------------------------"
 ```
 
 \      -----------------------------------------------------------------
