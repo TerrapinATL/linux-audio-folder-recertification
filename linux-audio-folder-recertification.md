@@ -176,11 +176,11 @@ for ext in "${EXTS[@]}"; do
 
     fi
 
+done
+
             echo "----------------------------------------"
             echo "Folder Recertification: Step 2"
             echo "----------------------------------------"
-
-done
 
 ```
 
