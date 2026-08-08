@@ -101,6 +101,7 @@ verify_audio() {
     {
         echo "----------------------------------------"
         echo "Folder Recertification: Step 1"
+        echo "----------------------------------------"
         echo "Scan complete | Total: $total | Passed: $passed | Failed: $failed"
     } | tee -a "$LOG_FILE"
 
@@ -170,6 +171,9 @@ for ext in "${EXTS[@]}"; do
         echo "Processing ${#group[@]} file(s) [.$ext] in $(pwd)..." | tee -a "$LOG_FILE"
         if ! loudgain -a -k -s e -L -- "${group[@]}" 2>&1 | tee -a "$LOG_FILE"; then
             echo "ERROR: Loudgain failed for .$ext in $(pwd)." >&2 | tee -a "$LOG_FILE"
+            echo "----------------------------------------"
+            echo "Folder Recertification: Step 2"
+            echo "----------------------------------------"
         fi
 
     fi
@@ -234,6 +238,8 @@ verify_audio() {
 
     {
         echo "----------------------------------------"
+        echo "Folder Recertification: Step 3"
+        echo "----------------------------------------"
         echo "Scan complete | Total: $total | Passed: $passed | Failed: $failed"
     } | tee -a "$LOG_FILE"
 
@@ -279,13 +285,21 @@ if [ -s "$CHECKSUM" ]; then
     
     if sha512sum -c "$CHECKSUM" 2>&1 | tee -a "$LOG_FILE" | awk -F': ' '{printf "%-6s %s\n", $2, $1}'; then
         echo "VERIFIED: ALBUM CHECKSUM OK" | tee -a "$LOG_FILE"
+        echo "----------------------------------------"
+        echo "Folder Recertification: Step 4"
+        echo "----------------------------------------"
     else
         echo "FAILED: ALBUM CHECKSUM ERROR" | tee -a "$LOG_FILE"
+        echo "----------------------------------------"
+        echo "Folder Recertification: Step 4"
+        echo "----------------------------------------"
         exit 1
     fi
 else
     echo "FAILED: NO SUPPORTED AUDIO FILES FOUND" | tee -a "$LOG_FILE"
-    exit 1
+    echo "----------------------------------------"
+    echo "Folder Recertification: Step 4"
+    echo "----------------------------------------"    exit 1
 fi
 
 ```
@@ -356,6 +370,11 @@ for m in "${manifests[@]}"; do
         echo "OK [$i/$total] $label" | tee -a "$RUN_LOG"
     fi
     rm -f "$temp_err"
+
+        echo "----------------------------------------"
+        echo "Folder Recertification: Step 5"
+        echo "----------------------------------------"
+
 done
 
 ```
@@ -445,6 +464,10 @@ else
     exit 1
 fi
 
+    echo "----------------------------------------"
+    echo "Folder Recertification: Step 6"
+    echo "----------------------------------------"
+
 ```
 
 ---
@@ -486,6 +509,10 @@ if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
 else
     echo "Cleanup cancelled."
 fi
+
+    echo "----------------------------------------"
+    echo "Folder Recertification: Step 7"
+    echo "----------------------------------------"
 
 ```
 
