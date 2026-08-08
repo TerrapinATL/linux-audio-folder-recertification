@@ -374,11 +374,11 @@ for m in "${manifests[@]}"; do
     fi
     rm -f "$temp_err"
 
+done
+
         echo "----------------------------------------"
         echo "Folder Recertification: Step 5"
         echo "----------------------------------------"
-
-done
 
 ```
 
