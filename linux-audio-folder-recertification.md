@@ -17,13 +17,13 @@ Use these commands after making intentional library changes such as:
 
 -- Anticipated folder structure for this process:
 
-```
+`
 Artist/
 └── Album/
     ├── Track 01.flac
     ├── Track 02.mp3
     ├── Track 03.m4a    
-```
+`
 
 \      -----------------------------------------------------------------
 
@@ -288,22 +288,20 @@ if [ -s "$CHECKSUM" ]; then
     
     if sha512sum -c "$CHECKSUM" 2>&1 | tee -a "$LOG_FILE" | awk -F': ' '{printf "%-6s %s\n", $2, $1}'; then
         echo "VERIFIED: ALBUM CHECKSUM OK" | tee -a "$LOG_FILE"
-        echo "----------------------------------------"
-        echo "Folder Recertification: Step 4"
-        echo "----------------------------------------"
+
     else
         echo "FAILED: ALBUM CHECKSUM ERROR" | tee -a "$LOG_FILE"
-        echo "----------------------------------------"
-        echo "Folder Recertification: Step 4"
-        echo "----------------------------------------"
+
         exit 1
     fi
 else
     echo "FAILED: NO SUPPORTED AUDIO FILES FOUND" | tee -a "$LOG_FILE"
-    echo "----------------------------------------"
-    echo "Folder Recertification: Step 4"
-    echo "----------------------------------------"    exit 1
+     exit 1
 fi
+
+        echo "----------------------------------------"
+        echo "Folder Recertification: Step 4"
+        echo "----------------------------------------"
 
 ```
 
