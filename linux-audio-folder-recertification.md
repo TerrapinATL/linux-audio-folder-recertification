@@ -121,6 +121,8 @@ verify_audio
 #!/usr/bin/env bash
 # Step 2: Apply Album & Track Gain (With Pre-Sanitization for M4A/MP4/MP3)
 
+set -o pipefail
+
 LOG_DIR="$HOME/.logs/Linux_Audio_Folder_Level"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/STEP_2_album_gain.log"
@@ -129,23 +131,12 @@ EXTS=(flac m4a mp3 ogg opus mp4 aac ape wv mpc spx)
 
 shopt -s nullglob nocaseglob
 
-# Collect all matching audio files
+# Collect all matching audio files and run pre-sanitization
 all_files=()
 for ext in "${EXTS[@]}"; do
     group=( *."$ext" )
     if [ ${#group[@]} -gt 0 ]; then
         all_files+=( "${group[@]}" )
-    fi
-done
-
-if [ ${#all_files[@]} -eq 0 ]; then
-    echo "No supported audio files found in $(pwd)." | tee -a "$LOG_FILE"
-    exit 0
-fi
-
-for ext in "${EXTS[@]}"; do
-    group=( *."$ext" )
-    if [ ${#group[@]} -gt 0 ]; then
 
         # Container / Bitstream Pre-Sanitization prior to Loudgain
         if [[ "$ext" == "m4a" || "$ext" == "mp4" ]]; then
@@ -160,27 +151,30 @@ for ext in "${EXTS[@]}"; do
                 fi
             done
         elif [[ "$ext" == "mp3" ]]; then
-            if command -v mp3val &>/dev/null; then
+            if command -v mp3val &>/devnull; then
                 echo "Sanitizing ${#group[@]} .mp3 bitstream(s) with mp3val..." | tee -a "$LOG_FILE"
                 mp3val -f -t "${group[@]}" >>"$LOG_FILE" 2>&1
             else
                 echo "Notice: mp3val not found. Skipping MP3 bitstream repair." | tee -a "$LOG_FILE"
             fi
         fi
-
-        echo "Processing ${#group[@]} file(s) [.$ext] in $(pwd)..." | tee -a "$LOG_FILE"
-        if ! loudgain -a -k -s e -L -- "${group[@]}" 2>&1 | tee -a "$LOG_FILE"; then
-            echo "ERROR: Loudgain failed for .$ext in $(pwd)." >&2 | tee -a "$LOG_FILE"
-
-        fi
-
     fi
-
 done
 
-            echo "----------------------------------------"
-            echo "Folder Recertification: Step 2"
-            echo "----------------------------------------"
+if [ ${#all_files[@]} -eq 0 ]; then
+    echo "No supported audio files found in $(pwd)." | tee -a "$LOG_FILE"
+    exit 0
+fi
+
+# Run Loudgain ONCE across ALL files together for accurate Album Gain
+echo "Processing ${#all_files[@]} total file(s) in $(pwd)..." | tee -a "$LOG_FILE"
+if ! loudgain -a -k -s e -L -- "${all_files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+    echo "ERROR: Loudgain failed in $(pwd)." >&2 | tee -a "$LOG_FILE"
+fi
+
+echo "----------------------------------------"
+echo "Folder Recertification: Step 2"
+echo "----------------------------------------"
 
 ```
 
