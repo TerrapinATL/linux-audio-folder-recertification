@@ -151,7 +151,7 @@ for ext in "${EXTS[@]}"; do
                 fi
             done
         elif [[ "$ext" == "mp3" ]]; then
-            if command -v mp3val &>/devnull; then
+            if command -v mp3val &>/dev/null; then
                 echo "Sanitizing ${#group[@]} .mp3 bitstream(s) with mp3val..." | tee -a "$LOG_FILE"
                 mp3val -f -t "${group[@]}" >>"$LOG_FILE" 2>&1
             else
