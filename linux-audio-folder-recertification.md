@@ -182,6 +182,284 @@ Note: Wav & Aiff are not supported by Loudgain.
 
 \      -----------------------------------------------------------------
 
+04b. Step 2B: Verify Exact ReplayGain Metadata
+
+```bash
+
+#!/usr/bin/env bash
+
+# Step 2B: Verify Exact ReplayGain Metadata
+#
+# Purpose:
+#   Verify exactly what ReplayGain metadata is written to the supported
+#   audio files in the current directory.
+#
+# Important:
+#   - READ-ONLY: this script does not modify any files.
+#   - ReplayGain tag-name capitalization is preserved exactly as reported
+#     by ffprobe.
+#   - ReplayGain values are displayed exactly as reported by ffprobe.
+#   - Missing ReplayGain metadata is explicitly reported.
+#   - The script does NOT close or terminate the terminal.
+#
+# Requirements:
+#   ffprobe
+#   jq
+
+set -o pipefail
+
+EXTS=(flac m4a mp3 ogg opus mp4 aac ape wv mpc spx)
+
+shopt -s nullglob nocaseglob
+
+# ---------------------------------------------------------------------------
+# Dependency checks
+# ---------------------------------------------------------------------------
+
+if ! command -v ffprobe >/dev/null 2>&1; then
+    echo
+    echo "ERROR: ffprobe was not found."
+    echo "Step 2B cannot perform the verification."
+    echo
+    return 0 2>/dev/null || true
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+    echo
+    echo "ERROR: jq was not found."
+    echo "Step 2B cannot perform the verification."
+    echo
+    return 0 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Collect supported audio files in the current directory
+# ---------------------------------------------------------------------------
+
+all_files=()
+
+for ext in "${EXTS[@]}"; do
+    group=( *."$ext" )
+
+    if [ ${#group[@]} -gt 0 ]; then
+        all_files+=( "${group[@]}" )
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# No files found
+# ---------------------------------------------------------------------------
+
+if [ ${#all_files[@]} -eq 0 ]; then
+
+    echo
+    echo "============================================================"
+    echo "STEP 2B: EXACT REPLAYGAIN METADATA VERIFICATION"
+    echo "============================================================"
+    echo
+    echo "Directory:"
+    echo "  $(pwd)"
+    echo
+    echo "No supported audio files found."
+    echo
+    echo "============================================================"
+    echo "STEP 2B COMPLETE"
+    echo "============================================================"
+    echo
+
+    return 0 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Counters
+# ---------------------------------------------------------------------------
+
+total=${#all_files[@]}
+verified=0
+missing=0
+errors=0
+
+# ---------------------------------------------------------------------------
+# Header
+# ---------------------------------------------------------------------------
+
+echo
+echo "============================================================"
+echo "STEP 2B: EXACT REPLAYGAIN METADATA VERIFICATION"
+echo "============================================================"
+echo
+echo "Directory:"
+echo "  $(pwd)"
+echo
+echo "Supported files found:"
+echo "  $total"
+echo
+echo "READ-ONLY VERIFICATION"
+echo "NO FILES WILL BE MODIFIED."
+echo
+echo "ReplayGain tag names are displayed with their EXACT"
+echo "capitalization as reported by ffprobe."
+echo
+echo "============================================================"
+echo
+
+# ---------------------------------------------------------------------------
+# Examine every supported file
+# ---------------------------------------------------------------------------
+
+for f in "${all_files[@]}"; do
+
+    echo
+    echo "------------------------------------------------------------"
+    printf 'FILE: %s\n' "$f"
+    echo "------------------------------------------------------------"
+
+    # -----------------------------------------------------------------------
+    # Read format-level metadata
+    # -----------------------------------------------------------------------
+
+    metadata=$(
+        ffprobe \
+            -v error \
+            -show_entries format_tags \
+            -of json \
+            -- "$f"
+    )
+
+    probe_status=$?
+
+    if [ $probe_status -ne 0 ] || [ -z "$metadata" ]; then
+
+        echo
+        echo "STATUS: ERROR"
+        echo "ffprobe could not read the metadata from this file."
+        echo
+
+        ((errors++))
+
+        continue
+    fi
+
+    # -----------------------------------------------------------------------
+    # Find ReplayGain tags.
+    #
+    # The test is case-insensitive ONLY for identifying ReplayGain fields.
+    #
+    # The original key is printed unchanged.
+    #
+    # Therefore these remain visibly different:
+    #
+    #   REPLAYGAIN_TRACK_GAIN
+    #   ReplayGain_Track_Gain
+    #   replaygain_track_gain
+    # -----------------------------------------------------------------------
+
+    replaygain=$(
+        jq -r '
+            .format.tags // {}
+            | to_entries[]
+            | select(.key | test("^replaygain_"; "i"))
+            | "\(.key)=\(.value)"
+        ' <<< "$metadata"
+    )
+
+    # -----------------------------------------------------------------------
+    # No ReplayGain tags
+    # -----------------------------------------------------------------------
+
+    if [ -z "$replaygain" ]; then
+
+        echo
+        echo "STATUS: MISSING"
+        echo
+        echo "ReplayGain metadata:"
+        echo "  NONE FOUND"
+        echo
+
+        ((missing++))
+
+        continue
+    fi
+
+    # -----------------------------------------------------------------------
+    # ReplayGain tags found
+    # -----------------------------------------------------------------------
+
+    echo
+    echo "STATUS: FOUND"
+    echo
+    echo "ReplayGain metadata actually present:"
+    echo
+
+    while IFS= read -r line; do
+        printf '  %s\n' "$line"
+    done <<< "$replaygain"
+
+    # -----------------------------------------------------------------------
+    # Count ReplayGain fields
+    # -----------------------------------------------------------------------
+
+    tag_count=$(
+        jq '
+            [
+                .format.tags // {}
+                | to_entries[]
+                | select(.key | test("^replaygain_"; "i"))
+            ]
+            | length
+        ' <<< "$metadata"
+    )
+
+    echo
+    echo "ReplayGain field count: $tag_count"
+
+    ((verified++))
+
+done
+
+# ---------------------------------------------------------------------------
+# Final summary
+# ---------------------------------------------------------------------------
+
+echo
+echo
+echo "============================================================"
+echo "STEP 2B: VERIFICATION SUMMARY"
+echo "============================================================"
+echo
+echo "Total files examined : $total"
+echo "ReplayGain found     : $verified"
+echo "ReplayGain missing   : $missing"
+echo "Read errors          : $errors"
+echo
+
+if [ "$missing" -eq 0 ] && [ "$errors" -eq 0 ]; then
+
+    echo "RESULT: PASS"
+    echo
+    echo "ReplayGain metadata was found in every supported file."
+
+else
+
+    echo "RESULT: FAIL"
+    echo
+    echo "One or more files are missing ReplayGain metadata"
+    echo "or could not be read."
+
+fi
+
+echo
+echo "READ-ONLY VERIFICATION — NO FILES WERE MODIFIED."
+echo
+echo "============================================================"
+echo "Step 2: Apply Album & Track Gain"
+echo "============================================================"
+echo
+
+```
+
+\      -----------------------------------------------------------------
+
 05. Step 3: Re-Verify Audio Files
 
 ```bash
