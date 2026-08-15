@@ -26,6 +26,20 @@ The workflow performs four primary tasks:
 
 ---
 
+## Recommended Workflow
+
+A four part series to clean, verify, and lockdown securely the integrity of an audio file library. 
+
+1. linux-audio-moode-prep: https://github.com/TerrapinATL/linux-audio-moode-prep
+
+2. linux-audio-sha512-checksums: https://github.com/TerrapinATL/linux-audio-sha512-checksums
+
+3. linux-os.nemo-sha512-shortcut:https://github.com/TerrapinATL/linux-os-nemo-sha512-shortcut
+
+4. linux-audio-folder-recertification: https://github.com/TerrapinATL/linux-audio-folder-recertification
+
+---
+
 These procedures are designed to be run from either an **album** or **artist** directory, depending on the task being performed. They are intended as lightweight maintenance tools for users who want to quickly recertify a portion of their music library without rebuilding verification data for the entire collection.
 
 
