@@ -2,6 +2,10 @@ linux-audio-folder-recertification
 
 ---
 
+**Guide version: v4** — Current version; supersedes v3.
+
+---
+
 This series provides quick maintenance procedures for verifying and recertifying music libraries after making changes to existing audio files or metadata. Rather than rescanning an entire collection, these commands operate at the album or artist level, making it easy to update checksums and ReplayGain information following routine maintenance.
 
 ---
