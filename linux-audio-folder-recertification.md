@@ -2,6 +2,9 @@
 
 **Version: v4** — Current version; supersedes v3.
 
+Change log and version history are maintained separately:
+[linux-audio-folder-recertification-changelog.md](linux-audio-folder-recertification-changelog.md)
+
 ---
 
 01. Introduction
@@ -31,21 +34,38 @@ All scripts direct their tracking data to `$HOME/.logs/linux-audio-folder-recert
 
 ```
 Artist/
-└── Album/
-    ├── Track 01.flac
-    ├── Track 02.mp3
-    ├── Track 03.m4a
+└── YYYY Album Name/
+    ├── 01 Track One.flac
+    ├── 02 Track Two.mp3
+    └── 03 Track Three.m4a
 ```
+
+This guide works with any file naming, but the suite's `NN Title` convention (zero-padded track number, no dash) keeps the checksum manifests and moOde's display consistent with the other guides.
 
 -- Supported Audio Formats
 
 - flac
 - mp3
-- m4a
+- m4a / mp4
 - ogg
 - opus
 - wav
-- aiff
+- aiff / aif
+- aac
+
+-- Requirements
+
+To successfully execute the scripts in this guide, your system must have the following command-line tools installed and available in your shell's PATH:
+
+* flac – Required for FLAC integrity testing (Step 1).
+
+* ffmpeg / ffprobe – Required for multi-format integrity testing (Steps 1 and 4A) and MP4 container sanitizing (Step 2B).
+
+* loudgain – Required for calculating and writing ReplayGain metadata (Steps 2A and 2B) across FLAC, MP3, OGG, Opus, WAV, AIFF, M4A, and MP4.
+
+* sha512sum – Required for album and artist checksum creation and verification (Steps 3 and 5).
+
+* Core Utilities – Standard GNU core utilities (find, sort, awk, grep, wc, basename, dirname, xargs, mktemp, tee).
 
 ---
 
@@ -76,6 +96,11 @@ This step writes `step1-verify-audio.log` to `$HOME/.logs/linux-audio-folder-rec
 # Step 1: Verify Audio Files (Run from Album folder)
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
+
+# AUTOPURGE: remove all logs from any previous recertification run.
+# This runs at the START of the workflow, so the previous run's logs remain
+# on disk for review until the next run replaces them.
+rm -rf "$LOG_ROOT"
 mkdir -p "$LOG_ROOT"
 LOG_FILE="$LOG_ROOT/step1-verify-audio.log"
 : > "$LOG_FILE"
@@ -141,14 +166,16 @@ verify_audio
 
 -- Purpose
 
-Applies ReplayGain volume metadata. Note: WAV and AIFF are not supported by loudgain.
+Applies ReplayGain volume metadata. Handles FLAC, MP3, OGG, OPUS, WAV, and AIFF (M4A/MP4 is handled separately in Step 2B).
 
 -- Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
 
 ```bash
 
 #!/usr/bin/env bash
-# Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, etc.)
+# Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, WAV, AIFF)
+
+set -o pipefail
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
@@ -157,7 +184,9 @@ LOG_FILE="$LOG_ROOT/step2a-album-track-gain.log"
 # CLEANUP: reset this step's log from any previous run
 : > "$LOG_FILE"
 
+shopt -s nullglob nocaseglob
 files=( *.flac *.mp3 *.ogg *.opus *.wav *.aiff *.aif )
+shopt -u nullglob nocaseglob
 
 [ ${#files[@]} -eq 0 ] && exit 0
 
@@ -185,6 +214,8 @@ To guarantee stability:
 #!/usr/bin/env bash
 # Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
 
+set -o pipefail
+
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
 LOG_FILE="$LOG_ROOT/step2b-track-gain-m4a.log"
@@ -194,13 +225,14 @@ LOG_FILE="$LOG_ROOT/step2b-track-gain-m4a.log"
 
 shopt -s nullglob nocaseglob
 files=( *.m4a *.mp4 )
+shopt -u nullglob nocaseglob
 
 [ ${#files[@]} -eq 0 ] && exit 0
 
 echo "Sanitizing MP4 containers..." | tee -a "$LOG_FILE"
 for f in "${files[@]}"; do
-    tmp="._fixed_${f}"
-    if ffmpeg -v error -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp" 2>>"$LOG_FILE"; then
+    tmp=$(mktemp "$LOG_ROOT/step2b-fixed.XXXXXX.${f##*.}")
+    if ffmpeg -nostdin -v error -i "$f" -map 0 -map_metadata 0 -c copy -movflags +faststart "$tmp" 2>>"$LOG_FILE"; then
         mv "$tmp" "$f"
     else
         echo "Warning: FFmpeg container fix failed for $f" | tee -a "$LOG_FILE"
@@ -323,7 +355,7 @@ while IFS= read -r -d '' file; do
     total=$((total + 1))
     clean_file=$(printf '%s' "$file" | tr -d '\r')
 
-    if ffmpeg -v error -i "$clean_file" -f null - 2>>"$ERRORS"; then
+    if ffmpeg -nostdin -v error -i "$clean_file" -f null - 2>>"$ERRORS"; then
         passed=$((passed + 1))
         echo "OK: $clean_file" >> "$PASSED"
         echo "OK: $clean_file" >> "$LOG"
@@ -333,7 +365,7 @@ while IFS= read -r -d '' file; do
         echo "FAILED: $clean_file" | tee -a "$LOG"
     fi
 done < <(
-    find . -type f \( \
+    find . -type f ! -ipath '*/Ignore/*' \( \
         -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
         -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
         -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
@@ -451,7 +483,7 @@ while IFS= read -r -d '' album; do
 
     printf "%s  %s\n" "$hash" "$name" >> "$TEMP_CHECKSUM"
 done < <(
-    find . -mindepth 1 -maxdepth 1 -type d -print0 |
+    find . -mindepth 1 -maxdepth 1 -type d ! -ipath '*/Ignore/*' -print0 |
     LC_ALL=C sort -z
 )
 
@@ -490,12 +522,11 @@ done < "$CHECKSUM"
 
 echo "SUMMARY: $MISMATCH_COUNT album mismatch(es) found." | tee -a "$LOG_FILE"
 
-# Automatic log directory cleanup upon successful final pass
-if [ "$MISMATCH_COUNT" -eq 0 ]; then
-    echo "----------------------------------------"
-    echo "ALL PROCESSES PASSED. Purging log directory: $LOG_ROOT"
-    rm -rf "$LOG_ROOT"
-else
+# Logs are retained after this step so Steps 1-4A results can be reviewed.
+# They are purged automatically at the start of the next recertification
+# run (Step 1), or manually via Step 6.
+
+if [ "$MISMATCH_COUNT" -ne 0 ]; then
     echo "----------------------------------------" >&2
     echo "ARTIST CHECKSUM ERRORS DETECTED. Logs retained in $LOG_ROOT" >&2
     exit 1
@@ -586,9 +617,9 @@ echo "Log cleanup finished."
 
 -- Common Issues and Fixes
 
-1. Loudgain Fails on WAV / AIFF
+1. Loudgain and M4A/MP4 Files
 
-WAV and AIFF are not supported by loudgain. Only run Step 2A against FLAC, MP3, OGG, and OPUS files. M4A/MP4 must use Step 2B (track gain only).
+WAV and AIFF are supported by loudgain and are handled by Step 2A along with FLAC, MP3, OGG, and OPUS. M4A/MP4 must use Step 2B (track gain only), because of the loudgain MP4 atom bug described there.
 
 2. "MISSING ALBUM CHECKSUM" During Artist Checksum
 
@@ -642,9 +673,9 @@ Each step writes its own named log file directly in that one directory:
 
 -- General Cleanup
 
-Once you have reviewed the final logs and verified that your library changes are complete, you can safely delete the entire $HOME/.logs/linux-audio-folder-recertification directory, or run Step 6 to remove the log files with confirmation. The log directory is completely independent of the audio files and is no longer needed once the project is finished.
+Every recertification run starts fresh: Step 1 automatically purges the entire $HOME/.logs/linux-audio-folder-recertification directory, so the previous run's logs remain reviewable until the next run begins. Between runs, you can also delete the directory manually, or run Step 6 to remove the log files with confirmation. The log directory is completely independent of the audio files.
 
-\-------------------------------------------------------------------
+\---------------------------------------------------------------------------------------
 
 -- Disclaimer
 
