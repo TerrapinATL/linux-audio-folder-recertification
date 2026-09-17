@@ -1,6 +1,6 @@
 # linux-audio-folder-recertification
 
-**Guide version: v4** — Current version; supersedes v3.
+**Guide version: v5** — Current version; supersedes v4. Error fixes (MP4 files skipped by audio verification, missing loudgain `-L` flag, FLAC-specific testing at artist level, error-message accuracy, stale Step 6 reference, changelog file rebuilt as a real changelog) and script formatting aligned to the moOde cleanup guide standard (2026-09-17, see the change log).
 
 * Full guide: [linux-audio-folder-recertification.md](linux-audio-folder-recertification.md)
 * Change log: [linux-audio-folder-recertification-changelog.md](linux-audio-folder-recertification-changelog.md)
