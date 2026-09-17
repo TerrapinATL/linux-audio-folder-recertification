@@ -1,6 +1,12 @@
 ### linux-audio-folder-recertification
 
-**Version: v4** — Current version; supersedes v3.
+**Version: v5** — Current version; supersedes v4. Error fixes (MP4
+scanning, loudgain -L flag, FLAC-specific testing at artist level,
+error-message accuracy, stale Step 6 reference, real changelog file)
+and script formatting aligned to the moOde cleanup guide standard
+(banner headers/footers, per-file [i/total] lines, album headers,
+keep-terminal-open trap).
+(Review and alignment applied 2026-09-17.)
 
 Change log and version history are maintained separately:
 [linux-audio-folder-recertification-changelog.md](linux-audio-folder-recertification-changelog.md)
@@ -95,6 +101,10 @@ This step writes `step1-verify-audio.log` to `$HOME/.logs/linux-audio-folder-rec
 #!/usr/bin/env bash
 # Step 1: Verify Audio Files (Run from Album folder)
 
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then trap - EXIT; echo; echo "Script exited with status $rc. Press ENTER to close this terminal."; read -r _; exit "$rc"; fi' EXIT
+
+set -u
+
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 
 # AUTOPURGE: remove all logs from any previous recertification run.
@@ -105,54 +115,70 @@ mkdir -p "$LOG_ROOT"
 LOG_FILE="$LOG_ROOT/step1-verify-audio.log"
 : > "$LOG_FILE"
 
-verify_audio() {
-    local passed=0 failed=0 total=0
+echo "========== Step 1: Verify Audio Files ==========" | tee -a "$LOG_FILE"
+echo "Root: $PWD" | tee -a "$LOG_FILE"
+echo "Started: $(date)" | tee -a "$LOG_FILE"
+echo
 
-    echo "Scanning audio files in $(pwd)..." | tee -a "$LOG_FILE"
+mapfile -d '' files < <(
+    find . -maxdepth 1 -type f \( \
+        -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o -iname "*.mp4" -o \
+        -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
+        -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
+    \) -print0 | LC_ALL=C sort -z -V
+)
 
-    while IFS= read -r -d '' file; do
-        ((total++))
+total=${#files[@]}
+i=0
+passed=0
+failed=0
 
-        case "${file,,}" in
-            *.flac)
-                if flac -s -t -- "$file" >/dev/null 2>&1; then
-                    echo "[OK]     $(basename "$file")" | tee -a "$LOG_FILE"
-                    ((passed++))
-                else
-                    echo "[FAILED] $(basename "$file")" | tee -a "$LOG_FILE"
-                    ((failed++))
-                fi
-                ;;
+for file in "${files[@]}"; do
+    ((i++))
 
-            *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus|*.aiff|*.aif)
-                if ffmpeg -nostdin -v error -hide_banner -nostats \
-                    -i "$file" -f null - >/dev/null 2>&1; then
-                    echo "[OK]     $(basename "$file")" | tee -a "$LOG_FILE"
-                    ((passed++))
-                else
-                    echo "[FAILED] $(basename "$file")" | tee -a "$LOG_FILE"
-                    ((failed++))
-                fi
-                ;;
-        esac
+    case "${file,,}" in
+        *.flac)
+            if flac -s -t -- "$file" >/dev/null 2>&1; then
+                echo "OK   [$i/$total] $(basename "$file")" | tee -a "$LOG_FILE"
+                ((passed++))
+            else
+                echo "FAIL [$i/$total] $(basename "$file")" | tee -a "$LOG_FILE"
+                ((failed++))
+            fi
+            ;;
 
-    done < <(
-        find . -maxdepth 1 -type f \( \
-            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
-            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
-            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
-        \) -print0 | LC_ALL=C sort -z -V
-    )
+        *.mp4)
+            if ffmpeg -nostdin -v error -hide_banner -nostats \
+                -i "$file" -f null - >/dev/null 2>&1; then
+                echo "OK   [$i/$total] $(basename "$file")" | tee -a "$LOG_FILE"
+                ((passed++))
+            else
+                echo "FAIL [$i/$total] $(basename "$file")" | tee -a "$LOG_FILE"
+                ((failed++))
+            fi
+            ;;
 
-    {
-        echo "----------------------------------------"
-        echo "SUMMARY: $total file(s) scanned, $passed passed, $failed failed."
-    } | tee -a "$LOG_FILE"
+        *.mp3|*.m4a|*.wav|*.ogg|*.aac|*.opus|*.aiff|*.aif)
+            if ffmpeg -nostdin -v error -hide_banner -nostats \
+                -i "$file" -f null - >/dev/null 2>&1; then
+                echo "OK   [$i/$total] $(basename "$file")" | tee -a "$LOG_FILE"
+                ((passed++))
+            else
+                echo "FAIL [$i/$total] $(basename "$file")" | tee -a "$LOG_FILE"
+                ((failed++))
+            fi
+            ;;
+    esac
+done
 
-    (( failed == 0 ))
-}
+echo
+echo "----------------------------------------" | tee -a "$LOG_FILE"
+echo "Scanned: $total  Passed: $passed  Failed: $failed" | tee -a "$LOG_FILE"
+echo "----------------------------------------" | tee -a "$LOG_FILE"
+echo "Step 1 – Verify Audio Files" | tee -a "$LOG_FILE"
+echo "----------------------------------------" | tee -a "$LOG_FILE"
 
-verify_audio
+[ "$failed" -eq 0 ]
 
 ```
 
@@ -175,7 +201,10 @@ Applies ReplayGain volume metadata. Handles FLAC, MP3, OGG, OPUS, WAV, and AIFF 
 #!/usr/bin/env bash
 # Step 2A: Apply Album & Track Gain (FLAC, MP3, OGG, OPUS, WAV, AIFF)
 
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then trap - EXIT; echo; echo "Script exited with status $rc. Press ENTER to close this terminal."; read -r _; exit "$rc"; fi' EXIT
+
 set -o pipefail
+set -u
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
@@ -184,16 +213,34 @@ LOG_FILE="$LOG_ROOT/step2a-album-track-gain.log"
 # CLEANUP: reset this step's log from any previous run
 : > "$LOG_FILE"
 
+echo "========== Step 2A: Apply Album & Track Gain ==========" | tee -a "$LOG_FILE"
+echo "Root: $PWD" | tee -a "$LOG_FILE"
+echo "Started: $(date)" | tee -a "$LOG_FILE"
+echo
+
 shopt -s nullglob nocaseglob
 files=( *.flac *.mp3 *.ogg *.opus *.wav *.aiff *.aif )
 shopt -u nullglob nocaseglob
 
-[ ${#files[@]} -eq 0 ] && exit 0
+if [ ${#files[@]} -eq 0 ]; then
+    echo "No supported audio files in this folder - nothing to do."
+    echo
+    echo "----------------------------------------"
+    echo "Step 2A – Apply Album & Track Gain"
+    echo "----------------------------------------"
+    exit 0
+fi
 
-if loudgain -k -s e -a -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+# moOde-standard flags: -a (album), -k (noclip), -s e (ReplayGain 2.0 + extra
+# tags), -L (force lowercase tag names) - matching the cleanup guide's Step 5.
+if loudgain -a -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
     echo "SUMMARY: ReplayGain applied to ${#files[@]} file(s) (album + track)." | tee -a "$LOG_FILE"
+    echo
+    echo "----------------------------------------" | tee -a "$LOG_FILE"
+    echo "Step 2A – Apply Album & Track Gain" | tee -a "$LOG_FILE"
+    echo "----------------------------------------" | tee -a "$LOG_FILE"
 else
-    echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
+    echo "ERROR: Loudgain failed in $PWD. Details saved to $LOG_FILE" >&2
     exit 1
 fi
 
@@ -214,7 +261,10 @@ To guarantee stability:
 #!/usr/bin/env bash
 # Step 2B: Apply Track Gain to M4A/MP4 Files (Container Repair & Workaround)
 
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then trap - EXIT; echo; echo "Script exited with status $rc. Press ENTER to close this terminal."; read -r _; exit "$rc"; fi' EXIT
+
 set -o pipefail
+set -u
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
@@ -223,11 +273,23 @@ LOG_FILE="$LOG_ROOT/step2b-track-gain-m4a.log"
 # CLEANUP: reset this step's log from any previous run
 : > "$LOG_FILE"
 
+echo "========== Step 2B: Apply Track Gain (M4A/MP4) ==========" | tee -a "$LOG_FILE"
+echo "Root: $PWD" | tee -a "$LOG_FILE"
+echo "Started: $(date)" | tee -a "$LOG_FILE"
+echo
+
 shopt -s nullglob nocaseglob
 files=( *.m4a *.mp4 )
 shopt -u nullglob nocaseglob
 
-[ ${#files[@]} -eq 0 ] && exit 0
+if [ ${#files[@]} -eq 0 ]; then
+    echo "No M4A/MP4 files in this folder - nothing to do."
+    echo
+    echo "----------------------------------------"
+    echo "Step 2B – Apply Track Gain (M4A/MP4)"
+    echo "----------------------------------------"
+    exit 0
+fi
 
 echo "Sanitizing MP4 containers..." | tee -a "$LOG_FILE"
 for f in "${files[@]}"; do
@@ -242,8 +304,12 @@ done
 
 if loudgain -k -s e -L -- "${files[@]}" 2>&1 | tee -a "$LOG_FILE"; then
     echo "SUMMARY: Track gain applied to ${#files[@]} M4A/MP4 file(s)." | tee -a "$LOG_FILE"
+    echo
+    echo "----------------------------------------" | tee -a "$LOG_FILE"
+    echo "Step 2B – Apply Track Gain (M4A/MP4)" | tee -a "$LOG_FILE"
+    echo "----------------------------------------" | tee -a "$LOG_FILE"
 else
-    echo "ERROR: Loudgain failed in $(pwd). Details saved to $LOG_FILE" >&2
+    echo "ERROR: Loudgain failed in $PWD. Details saved to $LOG_FILE" >&2
     exit 1
 fi
 
@@ -257,7 +323,7 @@ fi
 
 -- Purpose
 
-Run from the album folder. Creates a checksum file for the current folder, verifies that the generated hashes match immediately. Non-recursive: operates only on the current album folder.
+Run from the album folder. Creates a checksum file for the current folder, verifies that the generated hashes match immediately. Non-recursive: operates only on the current album folder. The manifest covers ALL files in the folder except the two manifest files themselves (matching the SHA-512 guide's Step 2, so artwork and other non-audio files are protected too).
 
 -- Logging
 
@@ -269,7 +335,10 @@ This step writes `step3-album-checksum.log` to `$HOME/.logs/linux-audio-folder-r
 #!/usr/bin/env bash
 # Step 3: Create and Verify Album Checksum
 
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then trap - EXIT; echo; echo "Script exited with status $rc. Press ENTER to close this terminal."; read -r _; exit "$rc"; fi' EXIT
+
 set -o pipefail
+set -u
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
@@ -278,27 +347,45 @@ LOG_FILE="$LOG_ROOT/step3-album-checksum.log"
 # CLEANUP: reset this step's log from any previous run
 : > "$LOG_FILE"
 
+echo "========== Step 3: Create and Verify Album Checksum ==========" | tee -a "$LOG_FILE"
+echo "Root: $PWD" | tee -a "$LOG_FILE"
+echo "Started: $(date)" | tee -a "$LOG_FILE"
+echo
+
 CHECKSUM="ALBUM.sha512sums.txt"
 
-find . -maxdepth 1 -type f ! -name "$CHECKSUM" \( \
-    -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
-    -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
-    -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif" \
-\) -print0 |
-LC_ALL=C sort -z |
-xargs -0 -r sha512sum > "$CHECKSUM"
+shopt -s nullglob
+files=(*)
+shopt -u nullglob
+target_files=()
+for f in "${files[@]}"; do
+    if [[ -f "$f" && "$f" != "ARTIST.sha512sums.txt" && "$f" != "ALBUM.sha512sums.txt" ]]; then
+        target_files+=("$f")
+    fi
+done
+
+if [ ${#target_files[@]} -eq 0 ]; then
+    echo "FAILED: NO FILES FOUND IN THIS FOLDER" | tee -a "$LOG_FILE"
+    exit 1
+fi
+
+sha512sum "${target_files[@]}" > "$CHECKSUM"
 
 if [ -s "$CHECKSUM" ]; then
     echo "CREATED: $CHECKSUM ($(wc -l < "$CHECKSUM") files)" | tee -a "$LOG_FILE"
 
     if sha512sum -c "$CHECKSUM" 2>&1 | tee -a "$LOG_FILE" | awk -F': ' '{printf "%-6s %s\n", $2, $1}'; then
         echo "SUMMARY: Album checksum verified OK." | tee -a "$LOG_FILE"
+        echo
+        echo "----------------------------------------" | tee -a "$LOG_FILE"
+        echo "Step 3 – Create and Verify Album Checksum" | tee -a "$LOG_FILE"
+        echo "----------------------------------------" | tee -a "$LOG_FILE"
     else
         echo "FAILED: ALBUM CHECKSUM ERROR" | tee -a "$LOG_FILE"
         exit 1
     fi
 else
-    echo "FAILED: NO SUPPORTED AUDIO FILES FOUND" | tee -a "$LOG_FILE"
+    echo "FAILED: CHECKSUM FILE IS EMPTY - sha512sum failed. See: $LOG_FILE" | tee -a "$LOG_FILE"
     exit 1
 fi
 
@@ -316,7 +403,7 @@ Run these commands from the Artist directory.
 
 ---
 
-07. Step 4: Recursive Artist Audio Validation
+07. Step 1 – Recursive Artist Audio Validation (Artist)
 
 ---
 
@@ -326,54 +413,86 @@ Recursively inspect only supported audio files beneath that folder. Verify audio
 
 -- Logging
 
-This step writes `step4a-artist-audio-*.log` files (validation, passed, failed, errors) to `$HOME/.logs/linux-audio-folder-recertification`.
+This step writes `artist-step1-audio-*.log` files (validation, passed, failed, errors) to `$HOME/.logs/linux-audio-folder-recertification`.
 
---- Bash Script Step 4A Start ---
+--- Bash Script Artist Step 1 Start ---
 ```bash
 
 #!/usr/bin/env bash
-# Step 4A - Recursive Artist Audio Validation (Run from Artist folder)
+# Step 1 (Artist) - Recursive Artist Audio Validation (Run from Artist folder)
+
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then trap - EXIT; echo; echo "Script exited with status $rc. Press ENTER to close this terminal."; read -r _; exit "$rc"; fi' EXIT
+
+set -u
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
 
-LOG="$LOG_ROOT/step4a-artist-audio-validation.log"
-PASSED="$LOG_ROOT/step4a-artist-audio-passed.log"
-FAILED="$LOG_ROOT/step4a-artist-audio-failed.log"
-ERRORS="$LOG_ROOT/step4a-artist-audio-errors.log"
+LOG="$LOG_ROOT/artist-step1-audio-validation.log"
+PASSED="$LOG_ROOT/artist-step1-audio-passed.log"
+FAILED="$LOG_ROOT/artist-step1-audio-failed.log"
+ERRORS="$LOG_ROOT/artist-step1-audio-errors.log"
 
-: > "$LOG"
-: > "$PASSED"
-: > "$FAILED"
-: > "$ERRORS"
+: > "$LOG"; : > "$PASSED"; : > "$FAILED"; : > "$ERRORS"
 
-total=0; passed=0; failed=0
+echo "========== Artist Step 1: Recursive Audio Validation ==========" | tee -a "$LOG"
+echo "Root: $PWD" | tee -a "$LOG"
+echo "Started: $(date)" | tee -a "$LOG"
+echo
 
-echo "Starting recursive validation for: $(pwd)" | tee -a "$LOG"
-
-while IFS= read -r -d '' file; do
-    total=$((total + 1))
-    clean_file=$(printf '%s' "$file" | tr -d '\r')
-
-    if ffmpeg -nostdin -v error -i "$clean_file" -f null - 2>>"$ERRORS"; then
-        passed=$((passed + 1))
-        echo "OK: $clean_file" >> "$PASSED"
-        echo "OK: $clean_file" >> "$LOG"
-    else
-        failed=$((failed + 1))
-        echo "FAILED: $clean_file" >> "$FAILED"
-        echo "FAILED: $clean_file" | tee -a "$LOG"
-    fi
-done < <(
+mapfile -d '' files < <(
     find . -type f ! -ipath '*/Ignore/*' \( \
-        -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
+        -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o -iname "*.mp4" -o \
         -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
         -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif"  \
-    \) -print0
+    \) -print0 | LC_ALL=C sort -z
 )
 
+total=${#files[@]}
+i=0
+passed=0
+failed=0
+last_dir=""
+
+echo "Scanning $total file(s) recursively..." | tee -a "$LOG"
+echo | tee -a "$LOG"
+
+for file in "${files[@]}"; do
+    i=$((i + 1))
+    rel="${file#./}"
+    current_dir="$(dirname "$rel")"
+
+    # Album header on folder change (suite screen convention)
+    if [[ -n "$last_dir" && "$current_dir" != "$last_dir" ]]; then
+        echo "" | tee -a "$LOG"
+        echo "── $current_dir ──" | tee -a "$LOG"
+    fi
+    last_dir="$current_dir"
+
+    case "${file,,}" in
+        *.flac) testerr=$(flac -s -t -- "$file" 2>&1 >/dev/null) ;;
+        *)      testerr=$(ffmpeg -nostdin -v error -i "$file" -f null - 2>&1) ;;
+    esac
+
+    if [ $? -eq 0 ]; then
+        passed=$((passed + 1))
+        echo "OK   [$i/$total] $rel" >> "$PASSED"
+        echo "OK   [$i/$total] $rel" >> "$LOG"
+        echo "OK   [$i/$total] $rel"
+    else
+        failed=$((failed + 1))
+        printf '%s\n' "$testerr" >> "$ERRORS"
+        echo "FAIL [$i/$total] $rel" | tee -a "$LOG"
+        echo "FAIL [$i/$total] $rel" >> "$FAILED"
+    fi
+done
+
+echo | tee -a "$LOG"
 echo "----------------------------------------" | tee -a "$LOG"
-echo "SUMMARY: $total file(s) scanned, $passed passed, $failed failed." | tee -a "$LOG"
+echo "Scanned: $total  Passed: $passed  Failed: $failed" | tee -a "$LOG"
+echo "----------------------------------------" | tee -a "$LOG"
+echo "Artist Step 1 – Recursive Audio Validation" | tee -a "$LOG"
+echo "----------------------------------------" | tee -a "$LOG"
 
 if (( failed > 0 )); then
     echo "Validation failed for $failed file(s). Review logs in: $LOG_ROOT" >&2
@@ -382,25 +501,25 @@ fi
 
 ```
 
---- Bash Script Step 4A End ---
+--- Bash Script Artist Step 1 End ---
 
 -- Separate Results
 
-Step 4A generates four distinct log files inside $HOME/.logs/linux-audio-folder-recertification/:
+Artist Step 1 generates four distinct log files inside $HOME/.logs/linux-audio-folder-recertification/:
 
-    step4a-artist-audio-validation.log
+    artist-step1-audio-validation.log
 
         Complete validation report summary.
 
-    step4a-artist-audio-passed.log
+    artist-step1-audio-passed.log
 
         List of all audio files that passed integrity checks.
 
-    step4a-artist-audio-failed.log
+    artist-step1-audio-failed.log
 
         List of audio files that failed integrity checks.
 
-    step4a-artist-audio-errors.log
+    artist-step1-audio-errors.log
 
         Raw ffmpeg decoder output recorded during failure inspection.
 
@@ -411,47 +530,55 @@ Step 4A generates four distinct log files inside $HOME/.logs/linux-audio-folder-
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 
 # View raw FFmpeg error output
-cat "$LOG_ROOT/step4a-artist-audio-errors.log"
+cat "$LOG_ROOT/artist-step1-audio-errors.log"
 
 # View overall summary report
-cat "$LOG_ROOT/step4a-artist-audio-validation.log"
+cat "$LOG_ROOT/artist-step1-audio-validation.log"
 
 # View list of passed files
-cat "$LOG_ROOT/step4a-artist-audio-passed.log"
+cat "$LOG_ROOT/artist-step1-audio-passed.log"
 
 # View list of failed files
-cat "$LOG_ROOT/step4a-artist-audio-failed.log"
+cat "$LOG_ROOT/artist-step1-audio-failed.log"
 
 ```
 
 ---
 
-08. Step 5: Create and Verify Artist Checksum
+08. Step 2 – Create and Verify Artist Checksum (Artist)
 
 ---
 
 -- Purpose
 
-Run from the artist folder only. Each immediate child folder is treated as an album folder. Requires completed `ALBUM.sha512sums.txt` files. Does not recursively inspect audio files.
+Run from the artist folder only. Each immediate child folder is treated as an album folder. Requires completed `ALBUM.sha512sums.txt` files. Each album's aggregate hash is computed the same way as the SHA-512 guide's Step 4 (recursively over ALL files except `ALBUM.sha512sums.txt`, so artwork is included) — keeping the manifest verifiable by the Nemo "Verify ARTIST SHA512" action and the SHA-512 guide.
 
 -- Logging
 
-This step writes `step5-artist-checksum.log` to `$HOME/.logs/linux-audio-folder-recertification`.
+This step writes `artist-step2-artist-checksum.log` to `$HOME/.logs/linux-audio-folder-recertification`.
 
---- Bash Script Step 5 Start ---
+--- Bash Script Artist Step 2 Start ---
 ```bash
 
 #!/usr/bin/env bash
-# Step 5 - Create and Verify Artist Checksum (Run from Artist folder)
+# Step 2 (Artist) - Create and Verify Artist Checksum (Run from Artist folder)
+
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then trap - EXIT; echo; echo "Script exited with status $rc. Press ENTER to close this terminal."; read -r _; exit "$rc"; fi' EXIT
 
 set -o pipefail
+set -u
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
 mkdir -p "$LOG_ROOT"
-LOG_FILE="$LOG_ROOT/step5-artist-checksum.log"
+LOG_FILE="$LOG_ROOT/artist-step2-artist-checksum.log"
 
 # CLEANUP: reset this step's log from any previous run
 : > "$LOG_FILE"
+
+echo "========== Artist Step 2: Create and Verify Artist Checksum ==========" | tee -a "$LOG_FILE"
+echo "Root: $PWD" | tee -a "$LOG_FILE"
+echo "Started: $(date)" | tee -a "$LOG_FILE"
+echo
 
 CHECKSUM="ARTIST.sha512sums.txt"
 TEMP_CHECKSUM="${CHECKSUM}.tmp"
@@ -459,33 +586,37 @@ FAILED=0
 
 : > "$TEMP_CHECKSUM"
 
+mapfile -d '' albums < <(
+    find . -mindepth 1 -maxdepth 1 -type d \
+        ! -ipath '*/Ignore/*' ! -ipath '*/Ignore' ! -iname 'Ignore' -print0 |
+        LC_ALL=C sort -z
+)
+
+total=${#albums[@]}
+i=0
+
 while IFS= read -r -d '' album; do
+    i=$((i + 1))
     name=$(basename "$album")
+    echo "── $name ──"
 
     if [ ! -f "$album/ALBUM.sha512sums.txt" ]; then
-        echo "FAILED: MISSING ALBUM CHECKSUM: $name" | tee -a "$LOG_FILE"
+        echo "FAIL [$i/$total] $name (MISSING ALBUM CHECKSUM)" | tee -a "$LOG_FILE"
         FAILED=1
         continue
     fi
 
     hash=$(
         cd "$album" &&
-        find . -maxdepth 1 -type f \( \
-            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
-            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
-            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif" \
-        \) -print0 |
+        find . -type f ! -name "ALBUM.sha512sums.txt" -print0 |
         LC_ALL=C sort -z |
-        xargs -0 -r sha512sum |
+        xargs -0 sha512sum |
         sha512sum |
         cut -d' ' -f1
     )
 
     printf "%s  %s\n" "$hash" "$name" >> "$TEMP_CHECKSUM"
-done < <(
-    find . -mindepth 1 -maxdepth 1 -type d ! -ipath '*/Ignore/*' -print0 |
-    LC_ALL=C sort -z
-)
+done < <(printf '%s\0' "${albums[@]}")
 
 if [ "$FAILED" -ne 0 ] || [ ! -s "$TEMP_CHECKSUM" ]; then
     rm -f "$TEMP_CHECKSUM"
@@ -501,13 +632,9 @@ MISMATCH_COUNT=0
 while read -r stored_hash album; do
     actual_hash=$(
         cd "$album" 2>/dev/null &&
-        find . -maxdepth 1 -type f \( \
-            -iname "*.flac" -o -iname "*.mp3"  -o -iname "*.m4a" -o \
-            -iname "*.wav"  -o -iname "*.ogg"  -o -iname "*.aac" -o \
-            -iname "*.opus" -o -iname "*.aiff" -o -iname "*.aif" \
-        \) -print0 |
+        find . -type f ! -name "ALBUM.sha512sums.txt" -print0 |
         LC_ALL=C sort -z |
-        xargs -0 -r sha512sum |
+        xargs -0 sha512sum |
         sha512sum |
         cut -d' ' -f1
     )
@@ -521,10 +648,14 @@ while read -r stored_hash album; do
 done < "$CHECKSUM"
 
 echo "SUMMARY: $MISMATCH_COUNT album mismatch(es) found." | tee -a "$LOG_FILE"
+echo
+echo "----------------------------------------" | tee -a "$LOG_FILE"
+echo "Artist Step 2 – Create and Verify Artist Checksum" | tee -a "$LOG_FILE"
+echo "----------------------------------------" | tee -a "$LOG_FILE"
 
 # Logs are retained after this step so Steps 1-4A results can be reviewed.
 # They are purged automatically at the start of the next recertification
-# run (Step 1), or manually via Step 6.
+# run (Album Step 1), or manually via Artist Step 3.
 
 if [ "$MISMATCH_COUNT" -ne 0 ]; then
     echo "----------------------------------------" >&2
@@ -534,11 +665,11 @@ fi
 
 ```
 
---- Bash Script Step 5 End ---
+--- Bash Script Artist Step 2 End ---
 
 ---
 
-09. Step 6: Log Cleanup
+09. Step 3 – Log Cleanup (Artist)
 
 ---
 
@@ -546,19 +677,23 @@ fi
 
 Finds existing log files, waits for user confirmation, removes them, and verifies cleanup.
 
---- Bash Script Step 6 Start ---
+--- Bash Script Artist Step 3 Start ---
 ```bash
 
 #!/usr/bin/env bash
-# Step 6: Log Cleanup
+# Step 3 (Artist): Log Cleanup
+
+set -u
 
 LOG_ROOT="$HOME/.logs/linux-audio-folder-recertification"
+
+echo "========== Artist Step 3: Log Cleanup =========="
 
 echo "Log directory:"
 echo "$LOG_ROOT"
 echo
 
-echo "Step 6A: Finding Log Files"
+echo "Step 3A: Finding Log Files"
 echo "----------------------------------------"
 
 LOG_COUNT=$(find "$LOG_ROOT" -type f -name "*.log" | wc -l)
@@ -582,7 +717,7 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
 fi
 
 echo
-echo "Step 6B: Deleting Log Files"
+echo "Step 3B: Deleting Log Files"
 echo "----------------------------------------"
 
 find "$LOG_ROOT" -type f -name "*.log" -delete
@@ -590,7 +725,7 @@ find "$LOG_ROOT" -type f -name "*.log" -delete
 echo "Log deletion complete."
 
 echo
-echo "Step 6C: Verify Log Deletion"
+echo "Step 3C: Verify Log Deletion"
 echo "----------------------------------------"
 
 REMAINING=$(find "$LOG_ROOT" -type f -name "*.log" | wc -l)
@@ -603,11 +738,13 @@ else
 fi
 
 echo
-echo "Log cleanup finished."
+echo "----------------------------------------"
+echo "Artist Step 3 – Log Cleanup"
+echo "----------------------------------------"
 
 ```
 
---- Bash Script Step 6 End ---
+--- Bash Script Artist Step 3 End ---
 
 ---
 
@@ -623,7 +760,7 @@ WAV and AIFF are supported by loudgain and are handled by Step 2A along with FLA
 
 2. "MISSING ALBUM CHECKSUM" During Artist Checksum
 
-Step 5 requires a completed `ALBUM.sha512sums.txt` in every album folder before the artist checksum can be created. Run Step 3 in any album folder that is missing one, then re-run Step 5.
+Artist Step 2 requires a completed `ALBUM.sha512sums.txt` in every album folder before the artist checksum can be created. Run Step 3 (Album Folder) in any album folder that is missing one, then re-run Artist Step 2.
 
 3. Permission Denied Errors
 
@@ -656,24 +793,24 @@ Each step writes its own named log file directly in that one directory:
   4. step3-album-checksum.log
     Album checksum creation and verification result.
 
-  5. step4a-artist-audio-validation.log
+  5. artist-step1-audio-validation.log
     Recursive artist audio validation summary.
 
-  6. step4a-artist-audio-passed.log
+  6. artist-step1-audio-passed.log
     List of files that passed validation.
 
-  7. step4a-artist-audio-failed.log
+  7. artist-step1-audio-failed.log
     List of files that failed validation.
 
-  8. step4a-artist-audio-errors.log
+  8. artist-step1-audio-errors.log
     Raw ffmpeg decoder output for failed files.
 
-  9. step5-artist-checksum.log
+  9. artist-step2-artist-checksum.log
     Artist checksum creation and per-album verification result.
 
 -- General Cleanup
 
-Every recertification run starts fresh: Step 1 automatically purges the entire $HOME/.logs/linux-audio-folder-recertification directory, so the previous run's logs remain reviewable until the next run begins. Between runs, you can also delete the directory manually, or run Step 6 to remove the log files with confirmation. The log directory is completely independent of the audio files.
+Every recertification run starts fresh: Step 1 automatically purges the entire $HOME/.logs/linux-audio-folder-recertification directory, so the previous run's logs remain reviewable until the next run begins. Between runs, you can also delete the directory manually, or run Artist Step 3 (Log Cleanup) to remove the log files with confirmation. The log directory is completely independent of the audio files.
 
 \---------------------------------------------------------------------------------------
 
