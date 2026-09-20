@@ -1,8 +1,6 @@
 ### linux-audio-folder-recertification
 
-**Version: v6** — Current version; supersedes v5. Adds Section 11:
-Library-Wide Verification & Repair (verify-mastercopy, alert-mastercopy,
-and the validated 4-step repair protocol). (2026-09-20.) Error fixes (MP4
+**Version: v5** — Current version; supersedes v4. Error fixes (MP4
 scanning, loudgain -L flag, FLAC-specific testing at artist level,
 error-message accuracy, stale Step 6 reference, real changelog file)
 and script formatting aligned to the moOde cleanup guide standard
@@ -813,39 +811,6 @@ Each step writes its own named log file directly in that one directory:
 -- General Cleanup
 
 Every recertification run starts fresh: Step 1 automatically purges the entire $HOME/.logs/linux-audio-folder-recertification directory, so the previous run's logs remain reviewable until the next run begins. Between runs, you can also delete the directory manually, or run Artist Step 3 (Log Cleanup) to remove the log files with confirmation. The log directory is completely independent of the audio files.
-
-
----
-
-11. Library-Wide Verification & Repair (Pi5 MasterCopy)
-
----
-
-The folder-level steps above re-certify one album or one artist at a time. For a whole-drive check there is an automated companion tool, `~/.local/bin/verify-mastercopy`, which verifies every artist's `ARTIST.sha512sums.txt` across an entire MasterCopy tree — 182 artists / 763 albums in one pass — with a live progress counter, ETA, and resume support (completed artists are skipped on re-run).
-
-Run it from anywhere (it targets the Pi5 server copy via gvfs; mount the share first with `gio mount smb://pi5-4gb.local/musicserver` if needed):
-
-```bash
-
-~/.local/bin/verify-mastercopy
-
-```
-
-* **Logs:** `~/.logs/mastercopy-verify/` — `results.txt` (per-album OK/MISMATCH lines), `progress.txt` (live counters), `summary.txt` (final tally).
-* **Screen conventions:** the suite standard — per-album `[OK/MISMATCH] [n/total]` lines, elapsed/ETA on screen.
-* **Audio alerts:** `~/.local/bin/alert-mastercopy` runs alongside it and beeps plus sends a desktop notification when a MISMATCH is found or when the run completes.
-
--- The repair protocol (validated on 4 real corruptions, 2026-09-19)
-
-When the sweep reports `MISMATCH <artist> <album>`:
-
-1. **Pinpoint with the album-level check** — run `sha512sum -c ALBUM.sha512sums.txt` inside the affected album folder. This names the exact file(s) that changed. Do not replace anything before this step.
-2. **Confirm the local backup is clean** — run the same check against the matching album in the local master (`/media/1TBp2/PiHDDBU/MasterCopy/...`). Only proceed if it passes.
-3. **Replace** — move the bad server copy out of the album directory to `/tmp/opencode` (never leave stray files in an album folder; they break the artist digest), then copy the verified local file over the share.
-4. **Recheck** — album-level `sha512sum -c`, then the artist-level nested digest, then update the sweep's `results.txt` entry to OK.
-
-The first full-drive run (Sep 2026) found 4 corrupted server files, all truncated by an interrupted transfer on Sep 18; every one was repaired with this protocol and re-verified. Files whose server copy differs but whose local copy also fails need investigation before anything is touched — a mismatch on both sides is never auto-repaired.
-
 
 \---------------------------------------------------------------------------------------
 

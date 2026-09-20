@@ -4,7 +4,8 @@ All version changes are appended to this file, newest last, one `## vX Change Lo
 
 **Update rule:** before writing to the version-less main guide file, the current content must first be saved as a versioned copy (e.g. `linux-audio-folder-recertification-v4.md`) so every published version stays retrievable.
 
-**Current version: v5** — supersedes v4. Error fixes (MP4 scanning, loudgain -L flag, FLAC-specific testing at artist level, error-message accuracy, stale Step 6 reference, real changelog file) and script formatting aligned to the moOde cleanup guide standard. See the v5 entry below.
+**Current version: v6** — supersedes v5. Adds Section 11 (Library-Wide
+Verification & Repair). See the v6 entry below. Error fixes (MP4 scanning, loudgain -L flag, FLAC-specific testing at artist level, error-message accuracy, stale Step 6 reference, real changelog file) and script formatting aligned to the moOde cleanup guide standard. See the v5 entry below.
 
 Main guide: [linux-audio-folder-recertification.md](linux-audio-folder-recertification.md)
 
@@ -66,3 +67,23 @@ Full review against the moOde cleanup guide standard, plus error fixes:
   each folder-level section (Album / Artist), per the suite's stated
   numbering rule for this guide.
 * All embedded scripts re-verified with `bash -n`.
+
+---
+
+## v6 Change Log (2026-09-20)
+
+* **New Section 11 — Library-Wide Verification & Repair.** Documents the
+  whole-drive verification tool (`~/.local/bin/verify-mastercopy`, 182
+  artists / 763 albums per pass, live progress with ETA, resume-safe)
+  and its alert companion (`alert-mastercopy`: beep + desktop
+  notification on MISMATCH or completion). Both are extensionless
+  Python, per the no-`.sh`-files convention.
+* **Documents the repair protocol** validated on 4 real corruptions
+  (2026-09-19): album-level pinpoint before replacing, local-backup
+  verification first, bad copies stashed in /tmp/opencode (never left in
+  album directories), album-level and artist-level recheck, log update.
+  Records that all 4 failures were truncated server files from an
+  interrupted Sep 18 transfer, repaired and re-verified.
+* **Versioned copy** — the prior guide (v5) was archived as
+  `linux-audio-folder-recertification-v5.md` before editing, per the
+  update rule.
