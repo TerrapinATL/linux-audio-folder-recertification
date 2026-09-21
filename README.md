@@ -1,6 +1,6 @@
 # linux-audio-folder-recertification
 
-**Guide version: v5** — Current version; supersedes v4. Error fixes (MP4 files skipped by audio verification, missing loudgain `-L` flag, FLAC-specific testing at artist level, error-message accuracy, stale Step 6 reference, changelog file rebuilt as a real changelog) and script formatting aligned to the moOde cleanup guide standard (2026-09-17, see the change log).
+**Guide version: v6** — Current version; supersedes v5. Adds Section 11 "Library-Wide Verification & Repair" (2026-09-20): documents the whole-drive verification tool `~/.local/bin/verify-mastercopy` (182 artists / 763 albums per pass, live progress with ETA, resume-safe) and its `alert-mastercopy` companion, plus the repair protocol validated on four real corruptions (see the change log).
 
 * Full guide: [linux-audio-folder-recertification.md](linux-audio-folder-recertification.md)
 * Change log: [linux-audio-folder-recertification-changelog.md](linux-audio-folder-recertification-changelog.md)
