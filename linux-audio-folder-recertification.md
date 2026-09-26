@@ -1,6 +1,12 @@
 ### linux-audio-folder-recertification
 
-**Version: v6** — Current version; supersedes v5. Adds Section 11:
+**Version: v7** — Manifest convention change: `ALBUM.sha512sums.txt` now
+hashes AUDIO FILES ONLY (cover art, `.mpdignore`, and other non-audio
+files are excluded), and the artist aggregate digest is computed over
+audio files only — matching the SHA-512 guide's v16. Supersedes v6.
+(2026-09-26.)
+
+Previous v6 — Current version as of 2026-09-20. Adds Section 11:
 Library-Wide Verification & Repair (verify-mastercopy, alert-mastercopy,
 and the validated 4-step repair protocol). (2026-09-20.) Error fixes (MP4
 scanning, loudgain -L flag, FLAC-specific testing at artist level,
@@ -325,7 +331,7 @@ fi
 
 -- Purpose
 
-Run from the album folder. Creates a checksum file for the current folder, verifies that the generated hashes match immediately. Non-recursive: operates only on the current album folder. The manifest covers ALL files in the folder except the two manifest files themselves (matching the SHA-512 guide's Step 2, so artwork and other non-audio files are protected too).
+Run from the album folder. Creates a checksum file for the current folder, verifies that the generated hashes match immediately. Non-recursive: operates only on the current album folder. The manifest covers the folder's AUDIO FILES ONLY (cover art, `.mpdignore`, and other non-audio files are excluded) — the v7 convention, matching the SHA-512 guide's v16.
 
 -- Logging
 
@@ -356,15 +362,10 @@ echo
 
 CHECKSUM="ALBUM.sha512sums.txt"
 
-shopt -s nullglob
-files=(*)
-shopt -u nullglob
-target_files=()
-for f in "${files[@]}"; do
-    if [[ -f "$f" && "$f" != "ARTIST.sha512sums.txt" && "$f" != "ALBUM.sha512sums.txt" ]]; then
-        target_files+=("$f")
-    fi
-done
+shopt -s nullglob nocaseglob
+audio_files=( *.flac *.mp3 *.m4a *.mp4 *.ogg *.opus *.wav *.aiff *.aif *.aac *.alac *.ape *.wv *.spx *.dsf )
+shopt -u nullglob nocaseglob
+target_files=( "${audio_files[@]}" )
 
 if [ ${#target_files[@]} -eq 0 ]; then
     echo "FAILED: NO FILES FOUND IN THIS FOLDER" | tee -a "$LOG_FILE"
@@ -610,7 +611,11 @@ while IFS= read -r -d '' album; do
 
     hash=$(
         cd "$album" &&
-        find . -type f ! -name "ALBUM.sha512sums.txt" -print0 |
+        find . -type f ! -name "ALBUM.sha512sums.txt" \
+            \( -iname "*.flac" -o -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.mp4" \
+               -o -iname "*.ogg" -o -iname "*.opus" -o -iname "*.wav" -o -iname "*.aiff" \
+               -o -iname "*.aif" -o -iname "*.aac" -o -iname "*.alac" -o -iname "*.ape" \
+               -o -iname "*.wv" -o -iname "*.spx" -o -iname "*.dsf" \) -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha512sum |
         sha512sum |
@@ -634,7 +639,11 @@ MISMATCH_COUNT=0
 while read -r stored_hash album; do
     actual_hash=$(
         cd "$album" 2>/dev/null &&
-        find . -type f ! -name "ALBUM.sha512sums.txt" -print0 |
+        find . -type f ! -name "ALBUM.sha512sums.txt" \
+            \( -iname "*.flac" -o -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.mp4" \
+               -o -iname "*.ogg" -o -iname "*.opus" -o -iname "*.wav" -o -iname "*.aiff" \
+               -o -iname "*.aif" -o -iname "*.aac" -o -iname "*.alac" -o -iname "*.ape" \
+               -o -iname "*.wv" -o -iname "*.spx" -o -iname "*.dsf" \) -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha512sum |
         sha512sum |

@@ -87,3 +87,19 @@ Full review against the moOde cleanup guide standard, plus error fixes:
 * **Versioned copy** — the prior guide (v5) was archived as
   `linux-audio-folder-recertification-v5.md` before editing, per the
   update rule.
+
+## v7 Change Log (2026-09-26)
+
+* **Manifest convention change: audio files only.** Step 3 (album
+  checksum) now hashes AUDIO FILES ONLY — cover art, `.mpdignore`, and
+  other non-audio files are excluded. Artist Step 2's aggregate digest
+  (creation and verification) recomputes over the same audio-only file
+  set, matching the SHA-512 guide's v16 and the Nemo actions' v8.
+  Artwork changes no longer invalidate artist manifests.
+* Owner decision (2026-09-26): checksums protect the audio; artwork is
+  freely replaceable and not part of the cryptographic baseline.
+* Manifests generated under the old all-files convention must be
+  regenerated to match.
+* **Versioned copy** — the prior guide (v6) was archived as
+  `Old/linux-audio-folder-recertification-v6.md` before editing, per the
+  update rule.
