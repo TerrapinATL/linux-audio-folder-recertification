@@ -1,6 +1,19 @@
 ### linux-audio-folder-recertification
 
-**Version: v7** — Manifest convention change: `ALBUM.sha512sums.txt` now
+**Version: v9** — Artist-digest scope change: the artist aggregate digest
+now covers **EVERYTHING in each album folder, INCLUDING
+`ALBUM.sha512sums.txt`** — audio files, cover art, and the album manifest
+itself, no exceptions (owner standard 2026-09-27, matching the SHA-512
+guide's v18; a corrupted ALBUM manifest is caught at the artist tier).
+ALBUM manifests remain AUDIO FILES ONLY. Supersedes v8. (2026-09-27.)
+
+Previous v8 — Artist-digest convention change: the artist aggregate
+digest now covers **EVERYTHING in each album folder except
+`ALBUM.sha512sums.txt`** — audio files AND cover art, no exceptions
+(owner standard 2026-09-27, matching the SHA-512 guide's v17). ALBUM
+manifests remain AUDIO FILES ONLY. Supersedes v7. (2026-09-27.)
+
+Previous v7 — Manifest convention change: `ALBUM.sha512sums.txt` now
 hashes AUDIO FILES ONLY (cover art, `.mpdignore`, and other non-audio
 files are excluded), and the artist aggregate digest is computed over
 audio files only — matching the SHA-512 guide's v16. Supersedes v6.
@@ -331,7 +344,7 @@ fi
 
 -- Purpose
 
-Run from the album folder. Creates a checksum file for the current folder, verifies that the generated hashes match immediately. Non-recursive: operates only on the current album folder. The manifest covers the folder's AUDIO FILES ONLY (cover art, `.mpdignore`, and other non-audio files are excluded) — the v7 convention, matching the SHA-512 guide's v16.
+Run from the album folder. Creates a checksum file for the current folder, verifies that the generated hashes match immediately. Non-recursive: operates only on the current album folder. The manifest covers the folder's AUDIO FILES ONLY (cover art, `.mpdignore`, and other non-audio files are excluded) — matching the SHA-512 guide's ALBUM convention (audio files only, since v16).
 
 -- Logging
 
@@ -554,7 +567,7 @@ cat "$LOG_ROOT/artist-step1-audio-failed.log"
 
 -- Purpose
 
-Run from the artist folder only. Each immediate child folder is treated as an album folder. Requires completed `ALBUM.sha512sums.txt` files. Each album's aggregate hash is computed the same way as the SHA-512 guide's Step 4 (recursively over ALL files except `ALBUM.sha512sums.txt`, so artwork is included) — keeping the manifest verifiable by the Nemo "Verify ARTIST SHA512" action and the SHA-512 guide.
+Run from the artist folder only. Each immediate child folder is treated as an album folder. Requires completed `ALBUM.sha512sums.txt` files. Each album's aggregate hash is computed the same way as the SHA-512 guide's Step 4 (recursively over ALL files — audio, artwork, and `ALBUM.sha512sums.txt` itself, no exceptions) — keeping the manifest verifiable by the Nemo "Verify ARTIST SHA512" action and the SHA-512 guide.
 
 -- Logging
 
@@ -611,11 +624,7 @@ while IFS= read -r -d '' album; do
 
     hash=$(
         cd "$album" &&
-        find . -type f ! -name "ALBUM.sha512sums.txt" \
-            \( -iname "*.flac" -o -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.mp4" \
-               -o -iname "*.ogg" -o -iname "*.opus" -o -iname "*.wav" -o -iname "*.aiff" \
-               -o -iname "*.aif" -o -iname "*.aac" -o -iname "*.alac" -o -iname "*.ape" \
-               -o -iname "*.wv" -o -iname "*.spx" -o -iname "*.dsf" \) -print0 |
+        find . -type f -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha512sum |
         sha512sum |
@@ -639,11 +648,7 @@ MISMATCH_COUNT=0
 while read -r stored_hash album; do
     actual_hash=$(
         cd "$album" 2>/dev/null &&
-        find . -type f ! -name "ALBUM.sha512sums.txt" \
-            \( -iname "*.flac" -o -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.mp4" \
-               -o -iname "*.ogg" -o -iname "*.opus" -o -iname "*.wav" -o -iname "*.aiff" \
-               -o -iname "*.aif" -o -iname "*.aac" -o -iname "*.alac" -o -iname "*.ape" \
-               -o -iname "*.wv" -o -iname "*.spx" -o -iname "*.dsf" \) -print0 |
+        find . -type f -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha512sum |
         sha512sum |

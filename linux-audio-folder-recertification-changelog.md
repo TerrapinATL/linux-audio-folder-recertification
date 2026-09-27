@@ -103,3 +103,34 @@ Full review against the moOde cleanup guide standard, plus error fixes:
 * **Versioned copy** — the prior guide (v6) was archived as
   `Old/linux-audio-folder-recertification-v6.md` before editing, per the
   update rule.
+
+## v8 Change Log (2026-09-27)
+
+* **Artist-digest convention change: everything, no exceptions.** Owner
+  standard (2026-09-27), matching the SHA-512 guide's v17: the artist
+  aggregate digest covers **EVERYTHING in each album folder except
+  `ALBUM.sha512sums.txt`** — audio files AND cover art. ALBUM manifests
+  remain AUDIO FILES ONLY. This supersedes the v7 audio-only artist
+  wording and resolves the guide's internal contradiction (the artist
+  Step 2 prose already described the all-files algorithm).
+* Artist Step 2 embedded script: the audio-extension `find` filter was
+  removed from both the creation and verification pipelines (decode-test
+  file discovery remains audio-only by design — it tests music files).
+* **Versioned copy** — the prior guide (v7) was archived as
+  `Old/linux-audio-folder-recertification-v7.md` before editing, per the
+  update rule.
+
+## v9 Change Log (2026-09-27)
+
+* **Artist-digest scope change: include the ALBUM manifest.** Owner
+  decision (2026-09-27): the artist aggregate digest now covers
+  **EVERYTHING in each album folder, INCLUDING `ALBUM.sha512sums.txt`** —
+  audio files, cover art, and the album manifest itself, no exceptions,
+  matching the SHA-512 guide's v18. Rationale: modifications or corruption
+  of an ALBUM manifest must be caught at the artist tier. ALBUM manifests
+  remain AUDIO FILES ONLY.
+* Artist Step 2 embedded script: the `! -name "ALBUM.sha512sums.txt"`
+  exclusion was removed from both the creation and verification pipelines.
+* **Versioned copy** — the prior guide (v8) was archived as
+  `Old/linux-audio-folder-recertification-v8.md` before editing, per the
+  update rule.

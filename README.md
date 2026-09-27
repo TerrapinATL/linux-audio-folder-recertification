@@ -1,6 +1,6 @@
 # linux-audio-folder-recertification
 
-**Guide version: v7** — Manifest convention change (2026-09-26): ALBUM manifests and the artist digest hash AUDIO FILES ONLY, matching the SHA-512 guide v16. Previous v6; supersedes v5. Adds Section 11 "Library-Wide Verification & Repair" (2026-09-20): documents the whole-drive verification tool `~/.local/bin/verify-mastercopy` (182 artists / 763 albums per pass, live progress with ETA, resume-safe) and its `alert-mastercopy` companion, plus the repair protocol validated on four real corruptions (see the change log).
+**Guide version: v9** — Artist-digest scope change (2026-09-27): the artist aggregate digest covers EVERYTHING in each album folder, INCLUDING ALBUM.sha512sums.txt (audio + cover art + the manifest itself, no exceptions), matching the SHA-512 guide v18; ALBUM manifests remain AUDIO FILES ONLY. Previous v8. v8 (2026-09-27) made the artist digest cover everything except the manifest; v7 (2026-09-26) made ALBUM manifests hash AUDIO FILES ONLY, matching the SHA-512 guide v16. Adds Section 11 "Library-Wide Verification & Repair" (2026-09-20): documents the whole-drive verification tool `~/.local/bin/verify-mastercopy` (whole library per pass, live progress with ETA, resume-safe) and its `alert-mastercopy` companion, plus the repair protocol validated on four real corruptions (see the change log).
 
 * Full guide: [linux-audio-folder-recertification.md](linux-audio-folder-recertification.md)
 * Change log: [linux-audio-folder-recertification-changelog.md](linux-audio-folder-recertification-changelog.md)
